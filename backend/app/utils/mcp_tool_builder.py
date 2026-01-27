@@ -1,0 +1,118 @@
+"""
+MCP Tool Builder - 从工具定义创建 EnhancedTool
+
+使用 lazy entrypoint，在执行时从 toolkit manager 获取 toolkit。
+"""
+from typing import List, Optional
+from pydantic import BaseModel
+
+from loguru import logger
+
+try:
+    from mcp.types import Tool as MCPTool
+except (ImportError, ModuleNotFoundError):
+    raise ImportError("`mcp` not installed. Please install using `pip install mcp`")
+
+from app.core.tools.tool import EnhancedTool, ToolMetadata, ToolSourceType
+from app.utils.mcp import create_lazy_mcp_entrypoint
+
+
+def _json_schema_to_pydantic_model(schema: any, name: str) -> Optional[type[BaseModel]]:
+    """
+    Convert a JSON Schema dict from MCP into a Pydantic BaseModel for validation.
+    Handles common primitive types, arrays, and objects. Falls back to None if unsupported.
+    
+    This is a standalone version matching the logic in MCPTools._json_schema_to_pydantic_model
+    to avoid duplication while maintaining consistency.
+    """
+    from pydantic import create_model
+    from typing import Any, Dict as TypingDict, List as TypingList, Optional as TypingOptional
+
+    try:
+        if not isinstance(schema, dict):
+            return None
+
+        properties = schema.get("properties", {}) or {}
+        required = set(schema.get("required", []) or [])
+
+        type_mapping = {
+            "string": str,
+            "integer": int,
+            "number": float,
+            "boolean": bool,
+        }
+
+        fields = {}
+        for prop_name, prop_schema in properties.items():
+            prop_type = prop_schema.get("type")
+            default = prop_schema.get("default", None)
+            py_type = Any
+
+            if prop_type in type_mapping:
+                py_type = type_mapping[prop_type]
+            elif prop_type == "array":
+                items = prop_schema.get("items", {})
+                item_type = type_mapping.get(items.get("type"), Any) if isinstance(items, dict) else Any
+                py_type = TypingList[item_type]  # type: ignore
+            elif prop_type == "object":
+                py_type = TypingDict[str, Any]
+
+            if prop_name in required and default is None:
+                fields[prop_name] = (py_type, ...)
+            else:
+                fields[prop_name] = (TypingOptional[py_type], default)
+
+        if not fields:
+            return None
+
+        model_name = f"MCP_{name}_Args"
+        return create_model(model_name, **fields)  # type: ignore
+    except Exception as e:
+        logger.debug(f"Failed to convert JSON schema to Pydantic for tool '{name}': {e}")
+        return None
+
+
+def create_mcp_tools_from_definitions(
+    mcp_tools: List[MCPTool],
+    server_name: str,
+    user_id: str,
+    timeout_seconds: int = 60,
+) -> List[EnhancedTool]:
+    """从 MCP 工具定义创建 EnhancedTool 列表"""
+    enhanced_tools = []
+    
+    for tool in mcp_tools:
+        try:
+            entrypoint = create_lazy_mcp_entrypoint(
+                tool_name=tool.name,
+                server_name=server_name,
+                user_id=user_id,
+            )
+            
+            args_schema_model = _json_schema_to_pydantic_model(tool.inputSchema, tool.name)
+            
+            metadata = ToolMetadata(
+                source_type=ToolSourceType.MCP,
+                tags={"mcp"},
+                mcp_server_name=server_name,
+                mcp_tool_name=tool.name,
+            )
+            metadata.custom_attrs["execution_timeout"] = timeout_seconds
+            
+            enhanced_tool = EnhancedTool.from_entrypoint(
+                name=tool.name,
+                description=tool.description or "",
+                args_schema=args_schema_model,
+                entrypoint=entrypoint,
+                tool_metadata=metadata,
+            )
+            
+            enhanced_tools.append(enhanced_tool)
+            logger.debug(f"Created EnhancedTool for MCP tool: {tool.name} from server: {server_name}")
+            
+        except Exception as e:
+            logger.error(f"Failed to create EnhancedTool for MCP tool {tool.name}: {e}")
+            continue
+    
+    return enhanced_tools
+

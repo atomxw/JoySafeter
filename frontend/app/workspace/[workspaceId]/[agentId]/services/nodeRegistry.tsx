@@ -1,0 +1,702 @@
+'use client'
+
+import {
+  Bot,
+  Split,
+  GitBranch,
+  MessageSquare,
+  Globe,
+  UserRound,
+  LucideIcon,
+  Wrench,
+  Route,
+  Repeat2,
+  Code,
+  Layers,
+  FileJson,
+  Globe2,
+  BrainCircuit,
+} from 'lucide-react'
+
+// --- Types ---
+
+export type FieldType =
+  | 'text'
+  | 'textarea'
+  | 'select'
+  | 'number'
+  | 'modelSelect'
+  | 'toolSelector'
+  | 'skillSelector'
+  | 'kvList'
+  | 'boolean'
+  | 'routeList'        // Route rule list
+  | 'conditionExpr'    // Conditional expression editor
+  | 'stringArray'      // String array input
+  | 'dockerConfig'     // Docker configuration editor
+
+export interface FieldSchema {
+  key: string
+  label: string
+  type: FieldType
+  placeholder?: string
+  options?: string[] // For static select
+  required?: boolean
+  description?: string
+  // For number type
+  min?: number
+  max?: number
+  step?: number
+  // For conditionExpr type
+  variables?: string[]  // Available variable hints
+  // Conditional display: only show when a field equals certain values
+  showWhen?: {
+    field: string                    // Dependent field key
+    values: (string | boolean | number)[]  // Show when field value is in this array
+  }
+}
+
+export interface NodeDefinition {
+  type: string
+  label: string
+  subLabel?: string
+  icon: LucideIcon
+  style: {
+    color: string // text-color class
+    bg: string // bg-color class
+  }
+  defaultConfig: Record<string, unknown>
+  schema: FieldSchema[]
+}
+
+// --- Registry Definitions ---
+
+const REGISTRY: NodeDefinition[] = [
+  {
+    type: 'agent',
+    label: 'Agent',
+    subLabel: 'LLM Process',
+    icon: Bot,
+    style: { color: 'text-blue-600', bg: 'bg-blue-50' },
+    defaultConfig: {
+      model: 'DeepSeek-Chat',
+      temp: 0.7,
+      systemPrompt: '',
+      enableMemory: false,
+      memoryModel: 'DeepSeek-Chat',
+      memoryPrompt:
+        'Summarize the interaction highlights and key facts learned about the user.',
+      useDeepAgents: false,
+      description: '',
+      backend_type: 'docker',
+      workspace_dir: '', // Custom workspace subdirectory (defaults to graph name)
+      docker_config: {
+        image: 'python:3.12-slim',
+        memory_limit: '512m',
+        cpu_quota: 50000,
+        network_mode: 'none',
+        working_dir: '/workspace',
+        auto_remove: true,
+        max_output_size: 100000,
+        command_timeout: 30,
+      },
+    },
+    schema: [
+      { key: 'model', label: 'Inference Model', type: 'modelSelect', required: true },
+      {
+        key: 'systemPrompt',
+        label: 'System Instruction',
+        type: 'textarea',
+        placeholder: 'You are a helpful assistant...',
+      },
+      { key: 'tools', label: 'Connected Tools', type: 'toolSelector' },
+      {
+        key: 'useDeepAgents',
+        label: 'Use DeepAgents Mode',
+        type: 'boolean',
+        description: 'Enable DeepAgents mode for advanced agent capabilities.',
+      },
+      {
+        key: 'skills',
+        label: 'Connected Skills',
+        type: 'skillSelector',
+        description: 'Skills provide specialized instructions that the agent can load on-demand.',
+        showWhen: {
+          field: 'useDeepAgents',
+          values: [true, 'true', 'True'],
+        },
+      },
+      {
+        key: 'description',
+        label: 'SubAgent Description',
+        type: 'textarea',
+        placeholder: 'Describe the capabilities of this subAgent...',
+        description:
+          'Required when DeepAgents mode is enabled. Describes what this subAgent can do.',
+      },
+      {
+        key: 'backend_type',
+        label: 'Backend Type',
+        type: 'select',
+        options: ['filesystem', 'docker'],
+        description:
+          'Backend type for agent execution. Docker provides isolated sandbox environment.',
+        showWhen: {
+          field: 'useDeepAgents',
+          values: ['true', 'True', true],
+        },
+      },
+      {
+        key: 'workspace_dir',
+        label: 'Workspace Directory',
+        type: 'text',
+        placeholder: 'Leave empty to use graph name',
+        description:
+          'Custom subdirectory name for filesystem backend workspace. If empty, uses the current graph name. Only used when backend_type is "filesystem".',
+        showWhen: {
+          field: 'backend_type',
+          values: ['filesystem'],
+        },
+      },
+      {
+        key: 'docker_config',
+        label: 'Docker Configuration',
+        type: 'dockerConfig',
+        description:
+          'Docker sandbox configuration. Only used when backend_type is "docker".',
+        showWhen: {
+          field: 'backend_type',
+          values: ['docker'],
+        },
+      },
+      // Memory Section is separated in UI but defined here
+      {
+        key: 'enableMemory',
+        label: 'Enable Long-term Memory',
+        type: 'boolean',
+        description: 'Save context across different sessions.',
+      },
+      {
+        key: 'memoryModel',
+        label: 'Memory Processing Model',
+        type: 'modelSelect',
+        description: 'Model used to summarize and update memory.',
+      },
+      {
+        key: 'memoryPrompt',
+        label: 'Memory Update Prompt',
+        type: 'textarea',
+        placeholder: 'How should memory be updated?',
+      },
+    ],
+  },
+  {
+    type: 'condition',
+    label: 'Condition',
+    subLabel: 'If/Else Split',
+    icon: Split,
+    style: { color: 'text-amber-500', bg: 'bg-amber-50' },
+    defaultConfig: {
+      expression: '',
+      trueLabel: 'Yes',
+      falseLabel: 'No',
+    },
+    schema: [
+      {
+        key: 'expression',
+        label: 'Condition Expression',
+        type: 'conditionExpr',
+        placeholder: "len(state.get('messages', [])) > 5",
+        description: 'Python expression that evaluates to True or False',
+        required: true,
+        variables: ['state', 'messages', 'context', 'current_node'],
+      },
+      {
+        key: 'trueLabel',
+        label: 'True Branch Label',
+        type: 'text',
+        placeholder: 'Yes',
+        description: 'Label for the True branch edge',
+      },
+      {
+        key: 'falseLabel',
+        label: 'False Branch Label',
+        type: 'text',
+        placeholder: 'No',
+        description: 'Label for the False branch edge',
+      },
+    ],
+  },
+  {
+    type: 'condition_agent',
+    label: 'Condition Agent',
+    subLabel: 'AI Decision Split',
+    icon: GitBranch,
+    style: { color: 'text-pink-500', bg: 'bg-pink-50' },
+    defaultConfig: { instruction: 'Analyze and route', options: ['Option A', 'Option B'] },
+    schema: [
+      {
+        key: 'instruction',
+        label: 'Routing Instruction',
+        type: 'textarea',
+        placeholder: 'Example: If user sentiment is positive, route to positive branch; otherwise route to negative branch',
+        description: 'Tell AI how to make routing decisions based on current context. AI will analyze message content and state, then select the corresponding route branch.',
+        required: true,
+      },
+      {
+        key: 'options',
+        label: 'Route Options',
+        type: 'stringArray',
+        placeholder: '输入选项名称（如：positive）',
+        description: '定义可用的路由分支列表。每个选项对应一个从该节点出发的连接。例如：positive, negative, neutral',
+      },
+    ],
+  },
+  {
+    type: 'http',
+    label: 'HTTP Request',
+    subLabel: 'API Call',
+    icon: Globe,
+    style: { color: 'text-rose-500', bg: 'bg-rose-50' },
+    defaultConfig: { method: 'GET', url: 'https://api.example.com' },
+    schema: [
+      {
+        key: 'method',
+        label: 'Method',
+        type: 'select',
+        options: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+      },
+      { key: 'url', label: 'URL', type: 'text', placeholder: 'https://api...' },
+    ],
+  },
+  {
+    type: 'custom_function',
+    label: 'Custom Tool',
+    subLabel: 'Function Definition',
+    icon: Wrench,
+    style: { color: 'text-purple-600', bg: 'bg-purple-50' },
+    defaultConfig: { name: 'my_tool', description: '', parameters: [] },
+    schema: [
+      {
+        key: 'name',
+        label: 'Tool Name',
+        type: 'text',
+        placeholder: 'e.g. get_weather',
+        required: true,
+      },
+      {
+        key: 'description',
+        label: 'Description',
+        type: 'textarea',
+        placeholder: 'Describe what this tool does...',
+        required: true,
+      },
+      {
+        key: 'parameters',
+        label: 'Parameters',
+        type: 'kvList',
+        description: 'Define arguments (Name : Type)',
+      },
+    ],
+  },
+  {
+    type: 'direct_reply',
+    label: 'Direct Reply',
+    subLabel: 'Send Message',
+    icon: MessageSquare,
+    style: { color: 'text-emerald-500', bg: 'bg-emerald-50' },
+    defaultConfig: { template: 'Hello user' },
+    schema: [
+      {
+        key: 'template',
+        label: 'Message Template',
+        type: 'textarea',
+        placeholder: 'Hello {{username}}...',
+      },
+    ],
+  },
+  {
+    type: 'human_input',
+    label: 'Human Input',
+    subLabel: 'Approval / Input',
+    icon: UserRound,
+    style: { color: 'text-indigo-500', bg: 'bg-indigo-50' },
+    defaultConfig: { prompt: 'Please approve' },
+    schema: [{ key: 'prompt', label: 'Prompt Message', type: 'textarea' }],
+  },
+  // ==================== New Node Types ====================
+  {
+    type: 'router_node',
+    label: 'Router',
+    subLabel: 'Multi-Rule Routing',
+    icon: Route,
+    style: { color: 'text-orange-600', bg: 'bg-orange-50' },
+    defaultConfig: {
+      routes: [
+        {
+          id: `route_${Date.now()}_1`,
+          condition: "state.get('value', 0) > 10",
+          targetEdgeKey: 'high',
+          label: 'High Score',
+          priority: 0,
+        },
+        {
+          id: `route_${Date.now()}_2`,
+          condition: "state.get('value', 0) > 5",
+          targetEdgeKey: 'medium',
+          label: 'Medium Score',
+          priority: 1,
+        },
+      ],
+      defaultRoute: 'default',
+    },
+    schema: [
+      {
+        key: 'routes',
+        label: 'Route Rules',
+        type: 'routeList',
+        description: 'Define conditions for each outgoing edge. Rules are evaluated in priority order.',
+        required: true,
+      },
+      {
+        key: 'defaultRoute',
+        label: 'Default Route Key',
+        type: 'text',
+        placeholder: 'default',
+        description: 'Route key when no conditions match',
+      },
+    ],
+  },
+  {
+    type: 'loop_condition_node',
+    label: 'Loop Condition',
+    subLabel: 'Loop Control',
+    icon: Repeat2,
+    style: { color: 'text-cyan-600', bg: 'bg-cyan-50' },
+    defaultConfig: {
+      conditionType: 'while',
+      listVariable: 'items',
+      condition: 'loop_count < 3',
+      maxIterations: 5,
+    },
+    schema: [
+      {
+        key: 'conditionType',
+        label: 'Loop Type',
+        type: 'select',
+        options: ['forEach', 'while', 'doWhile'],
+        description: 'forEach: iterate list, while: check first, doWhile: execute first',
+        required: true,
+      },
+      {
+        key: 'listVariable',
+        label: 'List Variable',
+        type: 'text',
+        placeholder: 'items',
+        description: 'For forEach: state key containing the list to iterate',
+      },
+      {
+        key: 'condition',
+        label: 'Loop Condition',
+        type: 'conditionExpr',
+        placeholder: 'loop_count < 3 and state.get("has_error") == False',
+        description: 'For while/doWhile: expression returning True to continue, False to exit',
+        variables: ['state', 'loop_count', 'loop_state', 'context'],
+      },
+      {
+        key: 'maxIterations',
+        label: 'Max Iterations',
+        type: 'number',
+        min: 1,
+        max: 100,
+        step: 1,
+        description: 'Maximum number of loop iterations (safety limit)',
+        required: true,
+      },
+    ],
+  },
+  {
+    type: 'tool_node',
+    label: 'Tool',
+    subLabel: 'Tool Execution',
+    icon: Wrench,
+    style: { color: 'text-green-600', bg: 'bg-green-50' },
+    defaultConfig: {
+      tool_name: '',
+      input_mapping: {},
+    },
+    schema: [
+      {
+        key: 'tool_name',
+        label: 'Tool Name',
+        type: 'text',
+        placeholder: 'search_google',
+        description: 'Name of the tool to execute',
+        required: true,
+      },
+      {
+        key: 'input_mapping',
+        label: 'Input Mapping',
+        type: 'kvList',
+        description: 'Map state/context values to tool parameters',
+        placeholder: 'query: state.context.get("user_query")',
+      },
+    ],
+  },
+  {
+    type: 'function_node',
+    label: 'Function',
+    subLabel: 'Custom Function',
+    icon: Code,
+    style: { color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    defaultConfig: {
+      function_name: '',
+      function_code: '',
+    },
+    schema: [
+      {
+        key: 'function_name',
+        label: 'Predefined Function',
+        type: 'select',
+        options: ['math_add', 'math_multiply', 'string_concat', 'dict_get', 'dict_set'],
+        description: 'Select a predefined function, or leave empty to use custom code',
+      },
+      {
+        key: 'function_code',
+        label: 'Custom Code',
+        type: 'textarea',
+        placeholder: 'result = {"output": state.get("value", 0) * 2}',
+        description: 'Python code to execute (sandboxed). Use "result" variable for output.',
+      },
+    ],
+  },
+  {
+    type: 'aggregator_node',
+    label: 'Aggregator',
+    subLabel: 'Fan-In Aggregation',
+    icon: Layers,
+    style: { color: 'text-teal-600', bg: 'bg-teal-50' },
+    defaultConfig: {
+      error_strategy: 'best_effort',
+    },
+    schema: [
+      {
+        key: 'error_strategy',
+        label: 'Error Strategy',
+        type: 'select',
+        options: ['fail_fast', 'best_effort'],
+        description: 'fail_fast: one failure fails all | best_effort: collect successes',
+        required: true,
+      },
+    ],
+  },
+  {
+    type: 'json_parser_node',
+    label: 'JSON Parser',
+    subLabel: 'Parse & Transform',
+    icon: FileJson,
+    style: { color: 'text-yellow-600', bg: 'bg-yellow-50' },
+    defaultConfig: {
+      jsonpath_query: '',
+      json_schema: {},
+    },
+    schema: [
+      {
+        key: 'jsonpath_query',
+        label: 'JSONPath Query',
+        type: 'text',
+        placeholder: '$.data.items[*].name',
+        description: 'JSONPath expression to extract data',
+      },
+      {
+        key: 'json_schema',
+        label: 'JSON Schema',
+        type: 'textarea',
+        placeholder: '{"type": "object", "properties": {...}}',
+        description: 'JSON Schema for validation (optional)',
+      },
+    ],
+  },
+  {
+    type: 'http_request_node',
+    label: 'HTTP Request',
+    subLabel: 'Enhanced API Call',
+    icon: Globe2,
+    style: { color: 'text-red-600', bg: 'bg-red-50' },
+    defaultConfig: {
+      method: 'GET',
+      url: 'https://api.example.com/endpoint',
+      headers: {},
+      auth: { type: 'none' },
+      max_retries: 3,
+      timeout: 30.0,
+    },
+    schema: [
+      {
+        key: 'method',
+        label: 'Method',
+        type: 'select',
+        options: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+        required: true,
+      },
+      { key: 'url', label: 'URL', type: 'text', placeholder: 'https://api...', required: true },
+      {
+        key: 'headers',
+        label: 'Headers',
+        type: 'kvList',
+        description: 'HTTP headers as key-value pairs',
+      },
+      {
+        key: 'auth',
+        label: 'Authentication',
+        type: 'select',
+        options: ['none', 'bearer', 'basic'],
+        description: 'Authentication type',
+      },
+      {
+        key: 'max_retries',
+        label: 'Max Retries',
+        type: 'number',
+        placeholder: '3',
+        description: 'Maximum number of retry attempts',
+      },
+      {
+        key: 'timeout',
+        label: 'Timeout (seconds)',
+        type: 'number',
+        placeholder: '30.0',
+        description: 'Request timeout in seconds',
+      },
+    ],
+  },
+  // ==================== Code Agent ====================
+  {
+    type: 'code_agent',
+    label: 'Code Agent',
+    subLabel: 'Python Code Execution',
+    icon: BrainCircuit,
+    style: { color: 'text-violet-600', bg: 'bg-violet-50' },
+    defaultConfig: {
+      model: 'DeepSeek-Chat',
+      executor_type: 'local',
+      agent_mode: 'autonomous',
+      max_steps: 20,
+      enable_planning: false,
+      enable_data_analysis: true,
+      additional_imports: [],
+      docker_image: 'python:3.11-slim',
+      description: '',
+    },
+    schema: [
+      // === Basic Configuration ===
+      {
+        key: 'model',
+        label: 'Inference Model',
+        type: 'modelSelect',
+        required: true,
+        description: 'LLM model for code generation and reasoning',
+      },
+      {
+        key: 'agent_mode',
+        label: 'Agent Mode',
+        type: 'select',
+        options: ['autonomous', 'tool_executor'],
+        required: true,
+        description: 'autonomous: Self-planning agent | tool_executor: Passive code executor',
+      },
+      // === Executor Configuration ===
+      {
+        key: 'executor_type',
+        label: 'Executor Type',
+        type: 'select',
+        options: ['local', 'docker', 'auto'],
+        required: true,
+        description: 'local: Secure AST interpreter | docker: Docker sandbox | auto: Smart routing',
+      },
+      {
+        key: 'docker_image',
+        label: 'Docker Image',
+        type: 'text',
+        placeholder: 'python:3.11-slim',
+        description: 'Docker image for the executor sandbox',
+        showWhen: {
+          field: 'executor_type',
+          values: ['docker', 'auto'],
+        },
+      },
+      {
+        key: 'additional_imports',
+        label: 'Additional Imports',
+        type: 'stringArray',
+        placeholder: 'requests, beautifulsoup4',
+        description: 'Additional Python modules to allow',
+      },
+      // === Execution Parameters ===
+      {
+        key: 'max_steps',
+        label: 'Max Steps',
+        type: 'number',
+        min: 1,
+        max: 100,
+        step: 1,
+        description: 'Maximum Thought-Code-Observation iterations',
+      },
+      {
+        key: 'enable_planning',
+        label: 'Enable Planning',
+        type: 'boolean',
+        description: 'Enable multi-step task planning for complex tasks',
+      },
+      {
+        key: 'enable_data_analysis',
+        label: 'Data Analysis Mode',
+        type: 'boolean',
+        description: 'Enable pandas, numpy, matplotlib modules',
+      },
+      // === Tools (displayed in Tools section) ===
+      {
+        key: 'tools',
+        label: 'Connected Tools',
+        type: 'toolSelector',
+        description: 'External tools the Code Agent can use',
+      },
+      // === SubAgent Description ===
+      {
+        key: 'description',
+        label: 'SubAgent Description',
+        type: 'textarea',
+        placeholder: 'Describe what this Code Agent specializes in...',
+        description: 'Description when used as a SubAgent in DeepAgents mode',
+      },
+    ],
+  },
+]
+
+// === Registry API ===
+
+export const nodeRegistry = {
+  getAll: () => REGISTRY,
+
+  get: (type: string): NodeDefinition | undefined => {
+    return REGISTRY.find((n) => n.type === type)
+  },
+
+  /**
+   * Group definitions for the sidebar UI
+   */
+  getGrouped: () => {
+    return {
+      Agents: REGISTRY.filter((n) => ['agent', 'code_agent'].includes(n.type)),
+      'Flow Control': REGISTRY.filter((n) =>
+        ['condition', 'condition_agent', 'router_node', 'loop_condition_node'].includes(n.type)
+      ),
+      Actions: REGISTRY.filter((n) =>
+        ['custom_function', 'http', 'http_request_node', 'human_input', 'direct_reply', 'tool_node', 'function_node', 'json_parser_node'].includes(n.type)
+      ),
+      Aggregation: REGISTRY.filter((n) =>
+        ['aggregator_node'].includes(n.type)
+      ),
+    }
+  },
+}
+
