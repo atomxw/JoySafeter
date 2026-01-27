@@ -88,9 +88,8 @@ show_usage() {
   --api-url URL          前端连接后端的API地址（构建时注入）
   --backend-only         只构建后端镜像
   --frontend-only        只构建前端镜像
-  --mcp-only             只构建 MCP 服务镜像
   --init-only            只构建初始化镜像
-  --all                  构建所有镜像（包括 backend, frontend, mcp, init）
+  --all                  构建所有镜像（包括 backend, frontend, init）
   --no-cache             禁用 Docker 构建缓存（默认使用缓存）
   --mirror MIRROR        使用国内镜像源加速基础镜像（aliyun, tencent, huawei, docker-cn）
   --pip-mirror MIRROR    使用国内 pip 镜像源（aliyun, tencent, huawei, jd）
@@ -119,8 +118,11 @@ show_usage() {
   # 只构建前端多架构镜像
   $0 build --frontend-only
 
-  # 构建所有镜像（包括 MCP 和 init）
+  # 构建所有镜像（包括 init）
   $0 build --all
+  
+  # 注意：MCP 服务镜像使用预构建镜像 docker.io/jdopensource/joysafeter-mcp:latest
+  # 使用 pull 命令拉取 MCP 镜像
 
   # 构建并推送到仓库
   $0 push
@@ -310,32 +312,22 @@ build_image() {
 build_all_images() {
     local BUILD_BACKEND=${BUILD_BACKEND:-true}
     local BUILD_FRONTEND=${BUILD_FRONTEND:-true}
-    local BUILD_MCP=${BUILD_MCP:-false}
     local BUILD_INIT=${BUILD_INIT:-false}
     
     # 检查是否只构建特定服务
     if [ "$BACKEND_ONLY" = true ]; then
         BUILD_FRONTEND=false
-        BUILD_MCP=false
         BUILD_INIT=false
     elif [ "$FRONTEND_ONLY" = true ]; then
         BUILD_BACKEND=false
-        BUILD_MCP=false
-        BUILD_INIT=false
-    elif [ "$MCP_ONLY" = true ]; then
-        BUILD_BACKEND=false
-        BUILD_FRONTEND=false
-        BUILD_MCP=true
         BUILD_INIT=false
     elif [ "$INIT_ONLY" = true ]; then
         BUILD_BACKEND=false
         BUILD_FRONTEND=false
-        BUILD_MCP=false
         BUILD_INIT=true
     elif [ "$BUILD_ALL" = true ]; then
         BUILD_BACKEND=true
         BUILD_FRONTEND=true
-        BUILD_MCP=true
         BUILD_INIT=true
     fi
     
@@ -385,14 +377,8 @@ build_all_images() {
         echo ""
     fi
     
-    # 构建 MCP 镜像
-    if [ "$BUILD_MCP" = true ]; then
-        build_image "MCP服务" \
-            "$SCRIPT_DIR/docker/mcp.Dockerfile" \
-            "$PROJECT_ROOT" \
-            "$MCP_FULL_IMAGE"
-        echo ""
-    fi
+    # 注意：MCP 服务镜像使用预构建镜像 docker.io/jdopensource/joysafeter-mcp:latest
+    # 如需拉取 MCP 镜像，请使用 pull 命令
     
     # 构建初始化镜像
     if [ "$BUILD_INIT" = true ]; then
@@ -408,8 +394,8 @@ build_all_images() {
     echo "📦 镜像信息:"
     [ "$BUILD_BACKEND" = true ] && echo "   后端: $BACKEND_FULL_IMAGE"
     [ "$BUILD_FRONTEND" = true ] && echo "   前端: $FRONTEND_FULL_IMAGE"
-    [ "$BUILD_MCP" = true ] && echo "   MCP:  $MCP_FULL_IMAGE"
     [ "$BUILD_INIT" = true ] && echo "   Init: $INIT_FULL_IMAGE"
+    echo "   注意: MCP 服务镜像使用预构建镜像 docker.io/jdopensource/joysafeter-mcp:latest"
     echo ""
     echo "🏗️  构建平台: $PLATFORMS"
     echo ""
@@ -431,9 +417,11 @@ pull_images() {
     if [ -n "$NORMALIZED_REGISTRY" ]; then
         BACKEND_FULL_IMAGE="${NORMALIZED_REGISTRY}/${BACKEND_IMAGE}:${TAG}"
         FRONTEND_FULL_IMAGE="${NORMALIZED_REGISTRY}/${FRONTEND_IMAGE}:${TAG}"
+        MCP_FULL_IMAGE="${NORMALIZED_REGISTRY}/${MCP_IMAGE}:${TAG}"
     else
         BACKEND_FULL_IMAGE="${BACKEND_IMAGE}:${TAG}"
         FRONTEND_FULL_IMAGE="${FRONTEND_IMAGE}:${TAG}"
+        MCP_FULL_IMAGE="${MCP_IMAGE}:${TAG}"
     fi
     
     log_info "拉取后端镜像: $BACKEND_FULL_IMAGE"
@@ -452,6 +440,14 @@ pull_images() {
         exit 1
     fi
     
+    log_info "拉取 MCP 服务镜像: $MCP_FULL_IMAGE"
+    if docker pull "$MCP_FULL_IMAGE"; then
+        log_success "MCP 服务镜像拉取成功"
+    else
+        log_error "MCP 服务镜像拉取失败"
+        exit 1
+    fi
+    
     log_success "所有镜像拉取完成！"
     echo ""
     echo "📦 镜像信息:"
@@ -465,7 +461,6 @@ main() {
     local PUSH=false
     local BACKEND_ONLY=false
     local FRONTEND_ONLY=false
-    local MCP_ONLY=false
     local INIT_ONLY=false
     local BUILD_ALL=false
     local ARCH_LIST=()
@@ -548,10 +543,6 @@ main() {
                 ;;
             --frontend-only)
                 FRONTEND_ONLY=true
-                shift
-                ;;
-            --mcp-only)
-                MCP_ONLY=true
                 shift
                 ;;
             --init-only)

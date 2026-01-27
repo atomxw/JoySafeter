@@ -88,19 +88,9 @@ services:
       - init  # 使用 profile 控制，默认不启动
     command: ["python", "scripts/db/init-db.py"]
 
-  # MCP Server 服务
+  # MCP Server 服务（使用预构建镜像）
   mcpserver:
-    build:
-      context: ..
-      dockerfile: ./deploy/docker/mcp.Dockerfile
-      args:
-        # 基础镜像源配置（可选，用于国内加速）
-        # BASE_IMAGE_REGISTRY: "swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/"
-        # pip 镜像源配置（默认使用清华大学镜像源，可切换到国内镜像）
-        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple}
-        UV_INDEX_URL: ${UV_INDEX_URL:-https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple}
-        # apt 镜像源配置（可选，用于国内加速）
-        # APT_MIRROR: "http://mirrors.huaweicloud.com/ubuntu"
+    image: docker.io/jdopensource/joysafeter-mcp:latest
     container_name: joysafeter-mcpserver
     restart: unless-stopped
     env_file:

@@ -9,8 +9,7 @@ deploy/
 ├── docker/                          # Dockerfile 统一存放
 │   ├── backend.Dockerfile
 │   ├── frontend.Dockerfile
-│   ├── init.Dockerfile
-│   └── mcp.Dockerfile
+│   └── init.Dockerfile
 ├── scripts/
 │   ├── check-env.sh                 # 环境检查工具
 │   ├── dev.sh                       # 开发场景启动
@@ -233,7 +232,8 @@ bun run dev
 # 构建前后端镜像（默认：linux/amd64,linux/arm64）
 ./deploy.sh build
 
-# 构建所有镜像（包括 backend, frontend, mcp, init）
+# 构建所有镜像（包括 backend, frontend, init）
+# 注意：MCP 服务镜像使用预构建镜像 docker.io/jdopensource/joysafeter-mcp:latest
 ./deploy.sh build --all
 
 # 构建并推送到仓库
@@ -252,11 +252,11 @@ bun run dev
 # 只构建前端镜像
 ./deploy.sh build --frontend-only
 
-# 只构建 MCP 服务镜像
-./deploy.sh build --mcp-only
-
 # 只构建初始化镜像
 ./deploy.sh build --init-only
+
+# 注意：MCP 服务镜像使用预构建镜像 docker.io/jdopensource/joysafeter-mcp:latest
+# 如需拉取 MCP 镜像，使用: ./deploy.sh pull
 
 # 构建指定架构
 ./deploy.sh build --arch amd64 --arch arm64
