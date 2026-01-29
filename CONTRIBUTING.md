@@ -122,7 +122,7 @@ Unsure where to begin? Look for issues labeled:
    ```bash
    # Backend
    cd backend && pytest
-   
+
    # Frontend
    cd frontend && npm run test
    ```
@@ -131,38 +131,30 @@ Unsure where to begin? Look for issues labeled:
    ```bash
    # Backend
    cd backend && ruff check . && mypy .
-   
+
    # Frontend
    cd frontend && pnpm run lint
    ```
 
-6. **Set up Pre-commit Hooks (推荐)**:
-   
-   项目配置了 pre-commit hooks，会在提交前自动运行代码检查。强烈建议安装：
-   
+6. **Set up Pre-commit Hooks（必须）**:
+
+   项目配置了 pre-commit hooks，提交前会自动运行代码检查。**必须**在仓库根目录执行以下脚本（依赖后端 UV 环境）：
+
    ```bash
-   # 安装 pre-commit
-   pip install pre-commit
-   # 或使用 uv
-   uv pip install pre-commit
-   
-   # 安装 Git hooks
-   pre-commit install
-   
-   # 验证配置
-   pre-commit validate-config
-   
-   # 测试运行（检查所有文件）
-   pre-commit run --all-files
+   # 在仓库根目录执行（需已安装 uv）
+   ./scripts/setup-pre-commit.sh
+   # 或: bash scripts/setup-pre-commit.sh
    ```
-   
+
+   该脚本会使用 backend 的 UV 环境安装 pre-commit 依赖并安装 Git hooks，无需单独执行 `pip install pre-commit`。
+
    安装后，每次 `git commit` 时会自动：
    - 运行后端 Ruff 检查（`uv run ruff check .`）
    - 运行前端 ESLint 检查（`pnpm run lint`）
    - 运行其他代码质量检查
-   
-   如果检查失败，提交会被阻止，需要先修复错误。
-   
+
+   如果检查失败，提交会被阻止，需要先修复错误。未安装 hooks 或跳过提交时，CI 也会运行相同校验，不通过则 PR 无法合并。
+
    更多信息请参考 [Development Guide - Pre-commit Hooks](DEVELOPMENT.md#using-pre-commit-hooks)。
 
 7. **Commit your changes** following our commit guidelines
@@ -321,4 +313,3 @@ Any other context or screenshots.
 Feel free to open a discussion or reach out to the maintainers if you have questions about contributing.
 
 Thank you for contributing! 🎉
-

