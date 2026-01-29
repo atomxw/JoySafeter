@@ -1,6 +1,7 @@
 """
 模型凭据服务
 """
+
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -8,12 +9,12 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exceptions import NotFoundException
-from app.core.model import ModelType, validate_provider_credentials
+from app.core.model import validate_provider_credentials
 from app.core.model.factory import get_factory
 from app.core.model.utils import decrypt_credentials, encrypt_credentials
 from app.repositories.model_credential import ModelCredentialRepository
-from app.repositories.model_provider import ModelProviderRepository
 from app.repositories.model_instance import ModelInstanceRepository
+from app.repositories.model_provider import ModelProviderRepository
 
 from .base import BaseService
 
@@ -85,15 +86,17 @@ class ModelCredentialService(BaseService):
             credential = existing
         else:
             # 创建新凭据
-            credential = await self.repo.create({
-                "user_id": user_id,
-                "workspace_id": workspace_id,
-                "provider_id": provider.id,
-                "credentials": encrypted_credentials,
-                "is_valid": is_valid,
-                "last_validated_at": datetime.now(timezone.utc) if is_valid else None,
-                "validation_error": validation_error,
-            })
+            credential = await self.repo.create(
+                {
+                    "user_id": user_id,
+                    "workspace_id": workspace_id,
+                    "provider_id": provider.id,
+                    "credentials": encrypted_credentials,
+                    "is_valid": is_valid,
+                    "last_validated_at": datetime.now(timezone.utc) if is_valid else None,
+                    "validation_error": validation_error,
+                }
+            )
 
         # 创建凭据后，自动为该 provider 的所有模型创建全局模型实例记录（如果不存在）
         await self._ensure_model_instances(provider)
@@ -110,12 +113,12 @@ class ModelCredentialService(BaseService):
             "last_validated_at": credential.last_validated_at,
             "validation_error": credential.validation_error,
         }
-    
+
     async def _update_default_model_cache_if_needed(self, provider_name: str) -> None:
         """如果该provider有默认模型，更新缓存"""
         try:
-            from app.repositories.model_instance import ModelInstanceRepository
             from app.core.settings import set_default_model_config
+            from app.repositories.model_instance import ModelInstanceRepository
 
             repo = ModelInstanceRepository(self.db)
             default_instance = await repo.get_default()
@@ -129,12 +132,16 @@ class ModelCredentialService(BaseService):
                 )
 
                 if credentials:
-                    set_default_model_config({
-                        "model": default_instance.model_name,
-                        "api_key": credentials.get("api_key", ""),
-                        "base_url": credentials.get("base_url"),
-                        "timeout": default_instance.model_parameters.get("timeout", 30) if default_instance.model_parameters else 30,
-                    })
+                    set_default_model_config(
+                        {
+                            "model": default_instance.model_name,
+                            "api_key": credentials.get("api_key", ""),
+                            "base_url": credentials.get("base_url"),
+                            "timeout": default_instance.model_parameters.get("timeout", 30)
+                            if default_instance.model_parameters
+                            else 30,
+                        }
+                    )
         except Exception as e:
             # 缓存更新失败不影响主要功能，只记录日志
             print(f"Warning: Failed to update default model cache after credential change: {e}")
@@ -142,53 +149,56 @@ class ModelCredentialService(BaseService):
     async def _ensure_model_instances(self, provider) -> None:
         """确保该 provider 的所有模型在 model_instance 表中存在全局记录"""
         from loguru import logger
-        
+
         provider_instance = self.factory.get_provider(provider.name)
         if not provider_instance:
             return
-        
+
         # 遍历所有支持的模型类型
         for model_type in provider_instance.get_supported_model_types():
             try:
                 # 从工厂获取模型列表
                 models = provider_instance.get_model_list(model_type)
-                
+
                 for model_info in models:
                     model_name = model_info["name"]
-                    
+
                     # 检查是否已存在全局模型记录
                     existing = await self.instance_repo.get_by_provider_and_model(
                         provider.id,
                         model_name,
                     )
-                    
+
                     if not existing:
                         # 创建新的全局模型记录
-                        await self.instance_repo.create({
-                            "user_id": None,  # 全局记录
-                            "workspace_id": None,  # 全局记录
-                            "provider_id": provider.id,
-                            "model_name": model_name,
-                            "model_parameters": {},
-                            "is_default": False,
-                        })
+                        await self.instance_repo.create(
+                            {
+                                "user_id": None,  # 全局记录
+                                "workspace_id": None,  # 全局记录
+                                "provider_id": provider.id,
+                                "model_name": model_name,
+                                "model_parameters": {},
+                                "is_default": False,
+                            }
+                        )
                         logger.debug(f"已自动创建模型实例: {provider.name}/{model_name}")
             except Exception as e:
                 logger.warning(f"自动创建模型实例失败 {provider.name}/{model_type.value}: {str(e)}")
-        
+
         # 检查是否存在默认模型，如果没有则选择第一个创建的全局模型作为默认
-        from app.models.model_instance import ModelInstance
         from sqlalchemy import select
-        
+
+        from app.models.model_instance import ModelInstance
+
         default_instance = await self.instance_repo.get_default()
         if not default_instance:
             # 查询所有全局模型（user_id 为 None），按 created_at 升序排序
-            query = select(ModelInstance).where(
-                ModelInstance.user_id.is_(None)
-            ).order_by(ModelInstance.created_at.asc())
+            query = (
+                select(ModelInstance).where(ModelInstance.user_id.is_(None)).order_by(ModelInstance.created_at.asc())
+            )
             result = await self.db.execute(query)
             global_models = list(result.scalars().all())
-            
+
             if global_models:
                 # 选择第一个创建的模型设置为默认
                 first_model = global_models[0]
@@ -318,16 +328,16 @@ class ModelCredentialService(BaseService):
     ) -> Optional[Dict[str, Any]]:
         """
         获取当前凭据
-        
+
         逻辑：
         1. 优先查找模型级别的凭据（如果有的话）
         2. 如果没有模型级别的凭据，使用 provider 级别的凭据
-        
+
         Args:
             provider_name: 供应商名称
             model_type: 模型类型（ModelType 枚举）
             model_name: 模型名称
-            
+
         Returns:
             解密后的凭据，如果不存在则返回None
         """
@@ -337,7 +347,7 @@ class ModelCredentialService(BaseService):
 
         # TODO: 如果将来支持模型级别的凭据，在这里优先查找
         # 当前系统只支持 provider 级别的凭据，所以直接使用 provider 级别的凭据
-        
+
         # 优先查找全局凭据（user_id 为 NULL）
         credential = await self.repo.get_by_provider(provider.id)
 
@@ -390,4 +400,3 @@ class ModelCredentialService(BaseService):
             return None
 
         return decrypt_credentials(credential.credentials)
-

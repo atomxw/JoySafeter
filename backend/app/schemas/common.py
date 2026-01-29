@@ -1,10 +1,13 @@
 """
 通用 Schema
 """
-from typing import Any, Generic, List, Optional, TypeVar
-from pydantic import BaseModel, Field, ConfigDict
-from datetime import datetime
+
 import uuid
+from datetime import datetime
+from typing import Any, Generic, List, Optional, TypeVar
+
+from pydantic import BaseModel, ConfigDict, Field
+
 from app.schemas.base import BaseResponse
 
 T = TypeVar("T")
@@ -12,12 +15,14 @@ T = TypeVar("T")
 
 class MessageResponse(BaseModel):
     """消息响应"""
+
     message: str
     success: bool = True
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
     """分页响应"""
+
     items: List[T]
     total: int
     page: int = 1
@@ -27,22 +32,21 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 class BaseSchema(BaseModel):
     """基础 Schema"""
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class TimestampSchema(BaseSchema):
     """带时间戳的 Schema"""
+
     created_at: datetime
     updated_at: datetime
 
 
 class IDSchema(TimestampSchema):
     """带 ID 的 Schema"""
+
     id: uuid.UUID
-
-
-
 
 
 # Session schemas
@@ -81,4 +85,3 @@ class SessionList(BaseModel):
 
     sessions: List[SessionResponse]
     total: int
-

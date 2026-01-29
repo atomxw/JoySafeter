@@ -1,6 +1,6 @@
+import logging
 import time
 from typing import Any, Dict
-import logging
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.file_manager import file_manager
@@ -10,14 +10,14 @@ logger = logging.getLogger(__name__)
 
 class GeneratePayloadHandler(AbstractHandler):
     """Handler for generate_payload functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['msfvenom']
-    
+        """Handler related commands"""
+        return ["msfvenom"]
+
     def handle(self, data: Dict) -> Any:
         """Execute generate_payload with enhanced logging"""
         try:
@@ -37,16 +37,13 @@ class GeneratePayloadHandler(AbstractHandler):
             elif payload_type == "random":
                 import random
                 import string
-                content = ''.join(random.choices(string.ascii_letters + string.digits, k=size))
+
+                content = "".join(random.choices(string.ascii_letters + string.digits, k=size))
             else:
                 return {"error": "Invalid payload type"}
             # todo
             result = file_manager.create_file(filename, content)
-            result["payload_info"] = {
-                "type": payload_type,
-                "size": size,
-                "pattern": pattern
-            }
+            result["payload_info"] = {"type": payload_type, "size": size, "pattern": pattern}
             logger.info(f"🎯 Generated {payload_type} payload: {filename} ({size} bytes)")
             return result
         except Exception as e:

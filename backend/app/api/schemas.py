@@ -1,7 +1,5 @@
-from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
-from uuid import uuid4
+from typing import Generic, List, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -61,7 +59,6 @@ class HealthResponse(BaseModel):
 
     status: str = Field(..., description="Health status of the service")
     instantiated_at: str = Field(..., description="Unix timestamp when service was instantiated")
-
 
 
 T = TypeVar("T")

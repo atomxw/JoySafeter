@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
@@ -21,7 +21,7 @@ class Base64CodecHandler(AbstractHandler):
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
+        """Handler related commands"""
         return []
 
     def handle(self, data: Dict) -> Any:

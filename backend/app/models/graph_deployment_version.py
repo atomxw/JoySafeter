@@ -1,11 +1,12 @@
 """
 Graph 部署版本模型
 """
-import uuid
-from typing import Optional, TYPE_CHECKING
-from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Index, String, UniqueConstraint, func, DateTime
+import uuid
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,6 +27,7 @@ class GraphDeploymentVersion(BaseModel):
     - 同时只有一个活跃版本 (is_active=True)
     - 存储完整的图状态快照 (nodes + edges + variables)
     """
+
     __tablename__ = "graph_deployment_version"
 
     graph_id: Mapped[uuid.UUID] = mapped_column(

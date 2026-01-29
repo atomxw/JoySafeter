@@ -3,14 +3,15 @@
 HexStrike AI - File Manager
 File operations with safety checks and logging
 """
-from datetime import datetime
-from typing import Dict, Any, List
-from pathlib import Path
+
 import logging
-import os
 import shutil
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
+
 
 class FileOperationsManager:
     """Handle file operations with security and validation"""
@@ -91,12 +92,14 @@ class FileOperationsManager:
 
             files = []
             for item in dir_path.iterdir():
-                files.append({
-                    "name": item.name,
-                    "type": "directory" if item.is_dir() else "file",
-                    "size": item.stat().st_size if item.is_file() else 0,
-                    "modified": datetime.fromtimestamp(item.stat().st_mtime).isoformat()
-                })
+                files.append(
+                    {
+                        "name": item.name,
+                        "type": "directory" if item.is_dir() else "file",
+                        "size": item.stat().st_size if item.is_file() else 0,
+                        "modified": datetime.fromtimestamp(item.stat().st_mtime).isoformat(),
+                    }
+                )
 
             return {"success": True, "files": files}
 

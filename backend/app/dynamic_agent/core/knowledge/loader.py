@@ -7,7 +7,6 @@ Integrates with reference_search to provide context-aware keyword searches.
 Task: T008 - Load/register CTF keyword-guided recon knowledge pack
 """
 
-import logging
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -41,7 +40,7 @@ from .search import (
 # Fallback keywords for legacy search_knowledge_with_llm (only used in ENABLE_EAGER_RAG mode)
 FALLBACK_KEYWORDS = ["flag", "ctf", "exploit", "vulnerability"]
 
-from loguru import logger
+from loguru import logger  # noqa: E402
 
 
 def convert_attack_steps_to_tricks(attack_steps: list[dict[str, Any]]) -> list[Trick]:
@@ -57,7 +56,7 @@ def normalize_knowledge(yaml_data: dict[str, Any]) -> dict[str, Any]:
 class CtfKnowledgeLoader:
     """
     Loads and manages CTF knowledge packs.
-    
+
     Provides:
     - Loading CTF knowledge from YAML files
     - Keyword-guided reference search
@@ -80,19 +79,19 @@ class CtfKnowledgeLoader:
 
         for yaml_file in self.knowledge_path.glob("*.yaml"):
             try:
-                with open(yaml_file, encoding='utf-8') as f:
+                with open(yaml_file, encoding="utf-8") as f:
                     data = yaml.safe_load(f)
                     if data and isinstance(data, dict):
                         knowledge = CtfKnowledge(
-                            name=data.get('name', yaml_file.stem),
-                            category=data.get('category', 'unknown'),
-                            tags=data.get('tags', []),
-                            description=data.get('description', ''),
-                            prerequisites=data.get('prerequisites', []),
-                            indicators=data.get('indicators', []),
-                            detection=data.get('detection', []),
-                            mitigation=data.get('mitigation', []),
-                            limitations=data.get('limitations', []),
+                            name=data.get("name", yaml_file.stem),
+                            category=data.get("category", "unknown"),
+                            tags=data.get("tags", []),
+                            description=data.get("description", ""),
+                            prerequisites=data.get("prerequisites", []),
+                            indicators=data.get("indicators", []),
+                            detection=data.get("detection", []),
+                            mitigation=data.get("mitigation", []),
+                            limitations=data.get("limitations", []),
                         )
                         self._knowledge_cache[knowledge.name] = knowledge
                         logger.debug(f"Loaded CTF knowledge: {knowledge.name}")
@@ -117,12 +116,12 @@ class CtfKnowledgeLoader:
     ) -> dict[str, list[SearchResult]]:
         """
         Perform keyword-guided search based on context.
-        
+
         Args:
             context: Search context with challenge type and hints
             search_paths: Paths to search (uses defaults if None)
             max_results_per_keyword: Max results per keyword
-            
+
         Returns:
             Dict mapping keywords to their search results
         """
@@ -154,14 +153,14 @@ class CtfKnowledgeLoader:
     ) -> list[str]:
         """
         Legacy method for ENABLE_EAGER_RAG=true mode.
-        
+
         In Lazy RAG mode (default), Agent uses knowledge_search tool directly.
         This method is only called when ENABLE_EAGER_RAG=true.
-        
+
         Args:
             user_message: The original user message/challenge description
             search_paths: Paths to search for references
-            
+
         Returns:
             List of actionable hints from knowledge base
         """
@@ -184,7 +183,7 @@ class CtfKnowledgeLoader:
     def _search_yaml_with_keywords(self, keywords: list[str]) -> list[str]:
         """
         Search YAML knowledge files using LLM-extracted keywords.
-        
+
         NOTE: Implementation moved to `agent.core.knowledge.search` to keep this file small.
         """
         return _search_yaml_with_keywords_impl(
@@ -248,10 +247,10 @@ _loader_lock = Lock()
 def get_knowledge_loader() -> CtfKnowledgeLoader:
     """
     Get the application-level CTF knowledge loader singleton (thread-safe).
-    
+
     Returns:
         CtfKnowledgeLoader instance with pre-loaded CTF knowledge base.
-        
+
     Note:
         This singleton is justified because:
         1. Knowledge base is read-only reference data (immutable after loading)
@@ -277,12 +276,12 @@ def search_ctf_references(
 ) -> list[str]:
     """
     Convenience function to search CTF references.
-    
+
     Args:
         challenge_type: Type of CTF challenge
         user_hints: User-provided hints
         file_signals: File types in workspace
-        
+
     Returns:
         List of actionable hints
     """

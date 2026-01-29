@@ -1,10 +1,11 @@
 """
 Skill 模型
 """
+
 from __future__ import annotations
 
 import uuid
-from typing import Optional, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -96,4 +97,3 @@ class SkillFile(BaseModel):
         Index("skill_files_skill_idx", "skill_id"),
         Index("skill_files_path_idx", "skill_id", "path"),
     )
-

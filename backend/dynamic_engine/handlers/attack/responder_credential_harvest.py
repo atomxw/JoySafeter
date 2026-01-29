@@ -1,21 +1,22 @@
-from typing import Any, Dict
 import logging
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
 
 logger = logging.getLogger(__name__)
 
+
 class ResponderHandler(AbstractHandler):
     """Handler for responder functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['responder']
-    
+        """Handler related commands"""
+        return ["responder"]
+
     def handle(self, data: Dict) -> Any:
         """Execute responder with enhanced logging"""
         try:
@@ -42,7 +43,7 @@ class ResponderHandler(AbstractHandler):
                 command += f" {additional_args}"
             logger.info(f"🔍 Starting Responder on interface: {interface}")
             result = execute_command(command)
-            logger.info(f"📊 Responder completed")
+            logger.info("📊 Responder completed")
             return result
         except Exception as e:
             logger.error(f"💥 Error in responder endpoint: {str(e)}")

@@ -4,12 +4,13 @@ from textwrap import dedent
 from typing import List
 from uuid import uuid4
 
-from app.schemas.memory import UserMemory
-from app.core.agent.memory.strategies import MemoryOptimizationStrategy
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages.chat import ChatMessage as Message
-from app.utils.datetime import utc_now
 from loguru import logger
+
+from app.core.agent.memory.strategies import MemoryOptimizationStrategy
+from app.schemas.memory import UserMemory
+from app.utils.datetime import utc_now
 
 
 class SummarizeStrategy(MemoryOptimizationStrategy):
@@ -44,7 +45,7 @@ class SummarizeStrategy(MemoryOptimizationStrategy):
     def optimize(
         self,
         memories: List[UserMemory],
-        model: BaseChatModel,
+        model: BaseChatModel,  # type: ignore[override]
     ) -> List[UserMemory]:
         """Summarize multiple memories into single comprehensive summary.
 
@@ -96,7 +97,12 @@ class SummarizeStrategy(MemoryOptimizationStrategy):
 
         # Generate summarized content
         response = model.invoke(messages_for_model)
-        summarized_content = response.content or " ".join(memory_contents)
+        summarized_content = response.content if hasattr(response, "content") else " ".join(memory_contents)
+        content_str = str(summarized_content) if not isinstance(summarized_content, str) else summarized_content
+        if isinstance(content_str, list):
+            content_str = " ".join(str(item) for item in content_str)
+        if not content_str:
+            content_str = " ".join(memory_contents)
 
         # Generate new memory_id
         new_memory_id = str(uuid4())
@@ -104,12 +110,12 @@ class SummarizeStrategy(MemoryOptimizationStrategy):
         # Create summarized memory
         summarized_memory = UserMemory(
             memory_id=new_memory_id,
-            memory=summarized_content.strip(),
+            memory=content_str.strip() if isinstance(content_str, str) else "",
             topics=summarized_topics,
             user_id=user_id,
             agent_id=summarized_agent_id,
             team_id=summarized_team_id,
-            updated_at=utc_now(),
+            updated_at=int(utc_now().timestamp()),
         )
 
         logger.debug(
@@ -121,7 +127,7 @@ class SummarizeStrategy(MemoryOptimizationStrategy):
     async def aoptimize(
         self,
         memories: List[UserMemory],
-        model: BaseChatModel,
+        model: BaseChatModel,  # type: ignore[override]
     ) -> List[UserMemory]:
         """Async version: Summarize multiple memories into single comprehensive summary.
 
@@ -173,7 +179,12 @@ class SummarizeStrategy(MemoryOptimizationStrategy):
 
         # Generate summarized content (async)
         response = await model.ainvoke(messages_for_model)
-        summarized_content = response.content or " ".join(memory_contents)
+        summarized_content = response.content if hasattr(response, "content") else " ".join(memory_contents)
+        content_str = str(summarized_content) if not isinstance(summarized_content, str) else summarized_content
+        if isinstance(content_str, list):
+            content_str = " ".join(str(item) for item in content_str)
+        if not content_str:
+            content_str = " ".join(memory_contents)
 
         # Generate new memory_id
         new_memory_id = str(uuid4())
@@ -181,12 +192,12 @@ class SummarizeStrategy(MemoryOptimizationStrategy):
         # Create summarized memory
         summarized_memory = UserMemory(
             memory_id=new_memory_id,
-            memory=summarized_content.strip(),
+            memory=content_str.strip() if isinstance(content_str, str) else "",
             topics=summarized_topics,
             user_id=user_id,
             agent_id=summarized_agent_id,
             team_id=summarized_team_id,
-            updated_at=utc_now(),
+            updated_at=int(utc_now().timestamp()),
         )
 
         logger.debug(

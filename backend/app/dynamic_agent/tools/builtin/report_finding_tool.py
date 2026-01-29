@@ -8,24 +8,22 @@ which will be injected into LLM context in subsequent rounds.
 When FLAG is found, automatically set flag_found signal to terminate subsequent execution.
 """
 
-import logging
 import re
-from typing import Optional, Dict
+from typing import Dict
+
 from langchain_core.tools import tool
+from loguru import logger
 
 from app.dynamic_agent.infra.metadata_context import MetadataContext
 
-from loguru import logger
-
-
 # FLAG regex patterns
 FLAG_PATTERNS = [
-    re.compile(r'FLAG\{[^}]+\}', re.IGNORECASE),
-    re.compile(r'CTF\{[^}]+\}', re.IGNORECASE),
+    re.compile(r"FLAG\{[^}]+\}", re.IGNORECASE),
+    re.compile(r"CTF\{[^}]+\}", re.IGNORECASE),
 ]
 
 # MetadataContext key for findings storage
-_FINDINGS_KEY = 'report_findings_store'
+_FINDINGS_KEY = "report_findings_store"
 
 
 def get_findings_store() -> Dict[str, str]:
@@ -39,13 +37,13 @@ def get_findings_store() -> Dict[str, str]:
     if metadata is None:
         logger.warning("No MetadataContext available, returning empty findings")
         return {}
-    
+
     findings = metadata.get(_FINDINGS_KEY)
     if findings is None:
         # Initialize empty dict
         findings = {}
         metadata[_FINDINGS_KEY] = findings
-    
+
     return findings
 
 
@@ -67,7 +65,7 @@ def _is_real_flag(value: str) -> bool:
         return False
     lower = value.lower()
     # Exclude examples and placeholders
-    if 'example' in lower or value == 'FLAG{...}' or 'placeholder' in lower:
+    if "example" in lower or value == "FLAG{...}" or "placeholder" in lower:
         return False
     # Match FLAG pattern
     return any(p.match(value) for p in FLAG_PATTERNS)
@@ -77,27 +75,27 @@ def _is_real_flag(value: str) -> bool:
 def report_finding(key: str, value: str) -> str:
     """
     Report an important discovery for tracking (session-scoped).
-    
+
     Call this when you find critical information during execution:
     - credentials (username:password)
     - cookies or session tokens
     - API endpoints with parameters
     - flags or secrets
     - vulnerable parameters
-    
+
     Args:
         key: Category of finding (e.g., "credentials", "cookie", "endpoint", "flag")
         value: The actual value found (e.g., "admin:password123", "session=abc123")
-    
+
     Returns:
         Confirmation message
-    
+
     Examples:
         report_finding(key="credentials", value="test:test123")
         report_finding(key="cookie", value="PHPSESSID=abc123def456")
         report_finding(key="endpoint", value="/api/order/{id}/receipt")
         report_finding(key="flag", value="FLAG{example_flag}")
-    
+
     Note:
         Findings are stored in MetadataContext (session-scope), ensuring proper
         isolation between concurrent sessions.
@@ -107,27 +105,27 @@ def report_finding(key: str, value: str) -> str:
     findings_store[key] = value
 
     # Check if this is a FLAG
-    is_flag = (key.lower() == 'flag' and _is_real_flag(value))
+    is_flag = key.lower() == "flag" and _is_real_flag(value)
 
     # Update metadata
     try:
         metadata = MetadataContext.get()
         if metadata:
             # Update session_context
-            session_context = metadata.get('agent_session_context')
-            if session_context and hasattr(session_context, 'add_finding'):
+            session_context = metadata.get("agent_session_context")
+            if session_context and hasattr(session_context, "add_finding"):
                 session_context.add_finding(key, value)
 
             # FLAG discovery: set termination signal
             if is_flag:
-                metadata['flag_found'] = True
-                metadata['found_flag'] = value
+                metadata["flag_found"] = True
+                metadata["found_flag"] = value
                 logger.info(f"🏁 FLAG FOUND: {value} - Setting termination signal")
             else:
                 logger.info(f"🔑 Finding reported: {key}={value[:50]}...")
     except Exception as e:
         logger.warning(f"Failed to update metadata: {e}")
-    
+
     if is_flag:
         return f"🏁 FLAG CAPTURED: {value}\n✅ Task completed successfully!"
     return f"✅ Finding recorded: {key}={value[:100]}{'...' if len(value) > 100 else ''}"

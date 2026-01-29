@@ -4,7 +4,7 @@ API Key 模型
 
 import uuid
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -56,4 +56,3 @@ class ApiKey(BaseModel):
         Index("api_key_workspace_id_idx", "workspace_id"),
         Index("api_key_key_idx", "key"),
     )
-

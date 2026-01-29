@@ -1,12 +1,14 @@
 """
 基础模型
 """
+
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import DateTime, String, Boolean, func
-from sqlalchemy.orm import Mapped, mapped_column
+
+from sqlalchemy import DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import UserDefinedType
 
 from app.core.database import Base
@@ -39,6 +41,7 @@ def utc_now():
 
 class TimestampMixin:
     """时间戳混入"""
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -56,6 +59,7 @@ class TimestampMixin:
 
 class SoftDeleteMixin:
     """软删除混入"""
+
     deleted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -69,6 +73,7 @@ class SoftDeleteMixin:
 
 class BaseModel(Base, TimestampMixin):
     """基础模型"""
+
     __abstract__ = True
 
     id: Mapped[uuid.UUID] = mapped_column(

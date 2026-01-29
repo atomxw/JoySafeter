@@ -4,23 +4,22 @@ Database Manager Module.
 Handles asyncpg connection pool lifecycle management.
 """
 
-import logging
-import asyncpg
 from typing import Optional
 
+import asyncpg
 from loguru import logger
 
 
 class DatabaseManager:
     """Manages PostgreSQL connection pool."""
-    
+
     _instance = None
-    
+
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super(DatabaseManager, cls).__new__(cls)
         return cls._instance
-    
+
     def __init__(
         self,
         host: str = "localhost",
@@ -29,9 +28,9 @@ class DatabaseManager:
         user: str = "postgres",
         password: str = "",
         min_pool_size: int = 20,
-        max_pool_size: int = 50
+        max_pool_size: int = 50,
     ):
-        if not hasattr(self, 'pool'):
+        if not hasattr(self, "pool"):
             self.host = host
             self.port = port
             self.database = database
@@ -40,14 +39,16 @@ class DatabaseManager:
             self.min_pool_size = min_pool_size
             self.max_pool_size = max_pool_size
             self.pool: Optional[asyncpg.Pool] = None
-    
+
     async def initialize(self):
         """Initialize database connection pool with pre-warming."""
         if self.pool:
             logger.info(f"Database pool already initialized (min={self.min_pool_size}, max={self.max_pool_size})")
             return
 
-        logger.info(f"Creating database pool: host={self.host}, port={self.port}, db={self.database}, user={self.user}, min_size={self.min_pool_size}, max_size={self.max_pool_size}")
+        logger.info(
+            f"Creating database pool: host={self.host}, port={self.port}, db={self.database}, user={self.user}, min_size={self.min_pool_size}, max_size={self.max_pool_size}"
+        )
 
         try:
             self.pool = await asyncpg.create_pool(
@@ -68,7 +69,9 @@ class DatabaseManager:
                 #     lambda conn: logger.debug("Connection terminated")
                 # )
             )
-            logger.info(f"✅ Database connection pool created for {self.database} (min_size={self.min_pool_size}, max_size={self.max_pool_size})")
+            logger.info(
+                f"✅ Database connection pool created for {self.database} (min_size={self.min_pool_size}, max_size={self.max_pool_size})"
+            )
 
             # Pre-warm the pool by acquiring min_size connections
             # This prevents runtime latency when connections are first needed
@@ -85,24 +88,29 @@ class DatabaseManager:
         """
         import asyncio as async_lib
 
+        if self.pool is None:
+            raise RuntimeError("Pool must be initialized before pre-warming")
+
         logger.info(f"Pre-warming connection pool (creating {self.min_pool_size} connections)...")
 
         async def acquire_and_test(idx: int):
             """Acquire a connection, test it, and hold it until all are ready."""
+            if self.pool is None:
+                raise RuntimeError("Database pool not initialized")
             conn = None
             try:
                 conn = await self.pool.acquire(timeout=10.0)
                 # Test the connection with a simple query
                 result = await conn.fetchval("SELECT 1")
                 if result == 1:
-                    logger.debug(f"✓ Pre-warmed connection {idx+1}/{self.min_pool_size}")
+                    logger.debug(f"✓ Pre-warmed connection {idx + 1}/{self.min_pool_size}")
                     return (idx, conn, True)
                 else:
-                    logger.error(f"✗ Connection {idx+1} returned unexpected result: {result}")
+                    logger.error(f"✗ Connection {idx + 1} returned unexpected result: {result}")
                     return (idx, None, False)
             except Exception as e:
-                logger.error(f"✗ Failed to pre-warm connection {idx+1}: {e}")
-                if conn:
+                logger.error(f"✗ Failed to pre-warm connection {idx + 1}: {e}")
+                if conn and self.pool is not None:
                     # Release bad connection back to pool
                     await self.pool.release(conn)
                 return (idx, None, False)
@@ -132,21 +140,27 @@ class DatabaseManager:
                 logger.error(f"✗ Failed to release connection {idx}: {e}")
 
         # Verify pool size
-        actual_size = self.pool.get_size() if hasattr(self.pool, 'get_size') else 'unknown'
-        logger.info(f"✅ Connection pool pre-warmed: {success_count}/{self.min_pool_size} connections ready (actual pool size: {actual_size})")
+        actual_size = self.pool.get_size() if hasattr(self.pool, "get_size") else "unknown"
+        logger.info(
+            f"✅ Connection pool pre-warmed: {success_count}/{self.min_pool_size} connections ready (actual pool size: {actual_size})"
+        )
 
         if success_count != self.min_pool_size:
-            logger.warning(f"⚠️  Expected {self.min_pool_size} connections, but only {success_count} were successfully created")
-            logger.warning(f"⚠️  This may cause connection errors under high load")
-            logger.warning(f"⚠️  Check database connection limits, network stability, and PostgreSQL max_connections setting")
-    
+            logger.warning(
+                f"⚠️  Expected {self.min_pool_size} connections, but only {success_count} were successfully created"
+            )
+            logger.warning("⚠️  This may cause connection errors under high load")
+            logger.warning(
+                "⚠️  Check database connection limits, network stability, and PostgreSQL max_connections setting"
+            )
+
     async def close(self):
         """Close database connection pool."""
         if self.pool:
             await self.pool.close()
             self.pool = None
             logger.info("Database connection pool closed")
-    
+
     def get_pool(self) -> asyncpg.Pool:
         """Get the connection pool."""
         if not self.pool:

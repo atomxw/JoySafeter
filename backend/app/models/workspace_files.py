@@ -4,7 +4,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -86,4 +86,3 @@ class WorkspaceStoredFile(BaseModel):
         Index("workspace_files_workspace_id_idx", "workspace_id"),
         Index("workspace_files_context_idx", "context"),
     )
-

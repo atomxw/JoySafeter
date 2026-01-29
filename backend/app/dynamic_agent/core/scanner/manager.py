@@ -4,20 +4,18 @@ Scanner Manager - Orchestrates file extraction, scanning, and agent review
 
 import os
 import tempfile
-import zipfile
-import logging
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 import time
 import uuid
-
-from .engine import RegexEngine
-from .rules import VulnerabilityRule, Finding, load_rules
-from .agent import AgentReviewer
-from .sast_scanner import SASTScanner
-from .llm_reviewer import LLMAgentReviewer
+import zipfile
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
+
+from .agent import AgentReviewer
+from .engine import RegexEngine
+from .llm_reviewer import LLMAgentReviewer
+from .rules import load_rules
+from .sast_scanner import SASTScanner
 
 
 class FileManager:
@@ -42,7 +40,7 @@ class FileManager:
             ValueError: If a Zip Slip attempt is detected
         """
         try:
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 # ============ Security: Prevent Zip Slip vulnerability ============
                 extract_to_path = os.path.realpath(extract_to)
 
@@ -61,13 +59,11 @@ class FileManager:
                     file_mode = member.external_attr >> 16
                     if file_mode & 0o170000 == 0o120000:  # S_IFLNK = 0o120000
                         # Get symlink target from the ZIP file content
-                        link_target = zip_ref.read(member).decode('utf-8')
+                        link_target = zip_ref.read(member).decode("utf-8")
                         # Resolve symlink target and check if it stays within extraction directory
-                        link_target_path = os.path.realpath(os.path.join(
-                            extract_to,
-                            os.path.dirname(member.filename),
-                            link_target
-                        ))
+                        link_target_path = os.path.realpath(
+                            os.path.join(extract_to, os.path.dirname(member.filename), link_target)
+                        )
                         if not link_target_path.startswith(extract_to_path):
                             logger.warning(f"Malicious symlink detected: {member.filename} -> {link_target}")
                             raise ValueError(f"Malicious symlink detected: {member.filename}")
@@ -91,6 +87,7 @@ class FileManager:
         """
         if os.path.exists(directory):
             import shutil
+
             shutil.rmtree(directory)
             logger.info(f"Cleaned up directory: {directory}")
 
@@ -135,6 +132,7 @@ class ScannerManager:
         self.agent_reviewer = AgentReviewer()
 
         # New SAST-based scanner
+        self.sast_scanner: Optional[SASTScanner] = None
         if use_sast:
             try:
                 self.sast_scanner = SASTScanner()
@@ -145,6 +143,7 @@ class ScannerManager:
                 self.use_sast = False
 
         # LLM-based reviewer
+        self.llm_reviewer: Optional[LLMAgentReviewer] = None
         if use_llm_review:
             try:
                 self.llm_reviewer = LLMAgentReviewer(max_findings_per_batch=20)
@@ -153,7 +152,6 @@ class ScannerManager:
                 logger.warning(f"Failed to initialize LLM Reviewer: {e}. Using heuristic review.")
                 self.llm_reviewer = None
                 self.use_llm_review = False
-
 
     def run_scan(self, zip_path: str) -> Dict[str, Any]:
         """
@@ -181,8 +179,8 @@ class ScannerManager:
                 # Use Semgrep + Gitleaks
                 logger.info(f"Scan {scan_id}: Running SAST scanner (Semgrep + Gitleaks)...")
                 sast_result = self.sast_scanner.scan_directory(temp_dir)
-                findings_dicts = sast_result.get('findings', [])
-                
+                findings_dicts = sast_result.get("findings", [])
+
                 # Step 3: LLM-based review for high-severity findings
                 if self.use_llm_review and self.llm_reviewer:
                     logger.info(f"Scan {scan_id}: Running LLM verification on {len(findings_dicts)} findings...")
@@ -190,13 +188,13 @@ class ScannerManager:
                 else:
                     # Mark all as not reviewed
                     for f in findings_dicts:
-                        if f.get('agent_verification') is None:
-                            f['agent_verification'] = 'NOT_REQUIRED'
+                        if f.get("agent_verification") is None:
+                            f["agent_verification"] = "NOT_REQUIRED"
                     verified_findings = findings_dicts
 
                 # Calculate statistics
                 stats = self._calculate_stats(verified_findings)
-                
+
                 # Step 4: Prepare result
                 end_time = time.time()
                 scan_duration_ms = int((end_time - start_time) * 1000)
@@ -205,7 +203,7 @@ class ScannerManager:
                 result = {
                     "scan_id": scan_id,
                     "scan_mode": "sast",
-                    "tools_used": sast_result.get('tools_used', []),
+                    "tools_used": sast_result.get("tools_used", []),
                     "summary": stats,
                     "findings": verified_findings,
                     "scanned_files": scanned_files,
@@ -275,7 +273,7 @@ class ScannerManager:
         }
 
         for finding in findings:
-            severity = finding.get('severity', 'INFO').lower()
+            severity = finding.get("severity", "INFO").lower()
             if severity in stats:
                 stats[severity] += 1
 

@@ -1,8 +1,7 @@
-import os
-from typing import Any, Literal
+from typing import Any, Optional
 
 import dotenv
-import requests
+import requests  # type: ignore[import-untyped]
 
 dotenv.load_dotenv()
 
@@ -10,9 +9,9 @@ dotenv.load_dotenv()
 def http_request(
     url: str,
     method: str = "GET",
-    headers: dict[str, str] = None,
-    data: str | dict = None,
-    params: dict[str, str] = None,
+    headers: Optional[dict[str, str]] = None,
+    data: Optional[str | dict[Any, Any]] = None,
+    params: Optional[dict[str, str]] = None,
     timeout: int = 30,
 ) -> dict[str, Any]:
     """向API和Web服务发起HTTP请求。

@@ -7,32 +7,36 @@ System Prompts - Loads prompts from centralized registry.
 - Removed BASIC_GUIDELINES_PROMPT and TOOL_USAGE_GUIDE_PROMPT (merged into main_agent)
 """
 
-import logging
 from enum import Enum
-
-from .registry import get_registry
+from typing import Dict
 
 from loguru import logger
 
+from .registry import get_registry
 
 # =============================================================================
 # Scene Types - Define supported scene modes
 # =============================================================================
 
+
 class SceneType(Enum):
     """Supported scene types for agent operation modes."""
-    CTF = "ctf"           # CTF competition mode
-    PENTEST = "pentest"   # Corporate penetration testing mode
-    AUDIT = "audit"       # Security audit mode
-    WHITEBOX = "whitebox"   # General mode (default)
-    GENERAL = "general"   # General mode (default)
+
+    CTF = "ctf"  # CTF competition mode
+    PENTEST = "pentest"  # Corporate penetration testing mode
+    AUDIT = "audit"  # Security audit mode
+    WHITEBOX = "whitebox"  # General mode (default)
+    GENERAL = "general"  # General mode (default)
+
     @classmethod
     def values(cls):
         return [e.value for e in cls]
 
+
 # =============================================================================
 # Prompt Loading
 # =============================================================================
+
 
 def _load_prompt(prompt_id: str) -> str:
     """Load a prompt from the registry (no variable substitution)."""
@@ -42,13 +46,18 @@ def _load_prompt(prompt_id: str) -> str:
         return prompt.content  # Direct content, no render()
     except Exception as e:
         import logging
+
         logging.getLogger(__name__).warning(f"Failed to load prompt {prompt_id}: {e}")
         return f"[Prompt {prompt_id} not loaded]"
+
 
 # Minimal high-confidence CTF indicators (for fast pre-check)
 # These are patterns that DEFINITELY indicate CTF context
 CTF_DEFINITE_PATTERNS = [
-    'flag{', 'flag:', 'ctf{', 'capture the flag',
+    "flag{",
+    "flag:",
+    "ctf{",
+    "capture the flag",
 ]
 
 
@@ -61,7 +70,6 @@ def _classify_scene_with_llm(user_input: str) -> str:
     Returns:
         Scene type string: "ctf", "pentest", or "general"
     """
-    import logging
 
     from loguru import logger
 
@@ -72,7 +80,11 @@ def _classify_scene_with_llm(user_input: str) -> str:
         prompt = prompt_template.format(user_input=user_input[:500])
 
         response = get_default_llm().invoke(prompt)
-        result = response.content.strip().lower()
+        content = response.content if hasattr(response, "content") else str(response)
+        if isinstance(content, list):
+            content = " ".join(str(item) for item in content)
+        content_str = str(content) if content is not None else ""
+        result = content_str.strip().lower()
 
         # Validate result is a known scene type
         valid_scenes = {SceneType.CTF.value, SceneType.PENTEST.value, SceneType.GENERAL.value}
@@ -123,13 +135,14 @@ def get_ctf_mode_suffix(user_input: str) -> str:
     DEPRECATED: Use get_scene_prompt() instead.
     Kept for backward compatibility.
     """
-    if is_ctf_context(user_input):
-        return f"\n\n{_CTF_MODE_PROMPT}"
+    scene = detect_scene(user_input, use_llm=False)
+    if scene == SceneType.CTF.value:
+        return f"\n\n{get_scene_prompt(scene)}"
     return ""
 
 
 # Scene prompt registry - lazy loaded
-_SCENE_PROMPTS = {}
+_SCENE_PROMPTS: Dict[str, str] = {}
 # Lazy load scene prompts from scenes/{scene}/ctf_{role}.md
 MAIN_AGENT_SYSTEM_PROMPT_MAP = {
     SceneType.CTF.value: "scenes/ctf/ctf_main_agent",
@@ -137,6 +150,7 @@ MAIN_AGENT_SYSTEM_PROMPT_MAP = {
     SceneType.AUDIT.value: "scenes/whitebox/whitebox_main_agent",
     SceneType.WHITEBOX.value: "scenes/whitebox/whitebox_main_agent",
 }
+
 
 def _get_scene_prompt_content(scene: str) -> str:
     """
@@ -153,7 +167,7 @@ def _get_scene_prompt_content(scene: str) -> str:
     if scene and scene in SceneType.values():
         scene_content = _load_prompt(MAIN_AGENT_SYSTEM_PROMPT_MAP[scene])
     else:
-        scene_content = _load_prompt('scenes/cybersecurity/cybersecurity_main_agent.md')
+        scene_content = _load_prompt("scenes/cybersecurity/cybersecurity_main_agent.md")
 
     # Replace common tool variable placeholders for backward compatibility
     # This maintains compatibility with old BASIC_GUIDELINES_PROMPT and TOOL_USAGE_GUIDE_PROMPT
@@ -161,7 +175,8 @@ def _get_scene_prompt_content(scene: str) -> str:
     # (e.g., JSON examples like {"key": "value"} or URL patterns like /api/{id})
     if scene_content:
         try:
-            from app.common.constants import KNOWLEDGE_TOOL, COMMAND_TOOL, AGENT_TOOL, THINK_TOOL, COMMAND_HELP_TOOL
+            from app.common.constants import AGENT_TOOL, COMMAND_HELP_TOOL, COMMAND_TOOL, KNOWLEDGE_TOOL, THINK_TOOL
+
             scene_content = scene_content.replace("{KNOWLEDGE_TOOL}", KNOWLEDGE_TOOL)
             scene_content = scene_content.replace("{COMMAND_TOOL}", COMMAND_TOOL)
             scene_content = scene_content.replace("{AGENT_TOOL}", AGENT_TOOL)
@@ -214,8 +229,6 @@ def detect_scene(user_input: str, use_llm: bool = True) -> str:
     return SceneType.GENERAL.value
 
 
-
-
 def get_system_prompt_with_scene(scene: str = "") -> str:
     """
     Get system prompt with optional scene-specific content appended.
@@ -266,16 +279,16 @@ def format_hint_summary(applied_hints: list, skipped_hints: list) -> str:
     if applied_hints:
         lines.append("### ✅ Applied Hints")
         for i, hint in enumerate(applied_hints, 1):
-            content = hint.get('hint_content', '')[:50]
-            desc = hint.get('description', 'Action generated')
-            lines.append(f"{i}. **\"{content}...\"** → {desc}")
+            content = hint.get("hint_content", "")[:50]
+            desc = hint.get("description", "Action generated")
+            lines.append(f'{i}. **"{content}..."** → {desc}')
 
     if skipped_hints:
         lines.append("\n### ⏭️ Skipped Hints")
         for i, hint in enumerate(skipped_hints, 1):
-            content = hint.get('hint_content', '')[:50]
-            reason = hint.get('skip_reason', 'Unknown reason')
-            lines.append(f"{i}. **\"{content}...\"** → Skipped: {reason}")
+            content = hint.get("hint_content", "")[:50]
+            reason = hint.get("skip_reason", "Unknown reason")
+            lines.append(f'{i}. **"{content}..."** → Skipped: {reason}')
 
     if not applied_hints and not skipped_hints:
         lines.append("No user hints provided yet.")
@@ -323,4 +336,3 @@ __all__ = [
     "format_hint_summary",
     "get_sub_agent_static_prompt",
 ]
-

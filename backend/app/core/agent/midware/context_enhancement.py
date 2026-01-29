@@ -1,19 +1,19 @@
 """上下文增强中间件 - 增强对话上下文和提示词质量"""
 
-import json
 import os
-import re
+import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
+
+from langchain.agents.middleware.types import AgentState
 
 if TYPE_CHECKING:
-    from langgraph.runtime import Runtime
+    pass
 
 from deepagents.backends.protocol import BackendProtocol
-from langchain.agents.middleware.types import (AgentMiddleware, AgentState,
-                                               ModelRequest, ModelResponse)
-from typing_extensions import NotRequired, TypedDict
+from langchain.agents.middleware.types import AgentMiddleware, ModelRequest, ModelResponse
+from typing_extensions import NotRequired
 
 
 class ContextEnhancementState(AgentState):
@@ -239,7 +239,7 @@ class ContextEnhancementMiddleware(AgentMiddleware):
         try:
             file_count = 0
             total_size = 0
-            file_types = {}
+            file_types: Dict[str, int] = {}
 
             for file_path in path.rglob("*"):
                 if file_path.is_file():
@@ -257,9 +257,7 @@ class ContextEnhancementMiddleware(AgentMiddleware):
             stats = {
                 "file_count": file_count,
                 "total_size_mb": round(total_size / (1024 * 1024), 2),
-                "file_types": dict(
-                    sorted(file_types.items(), key=lambda x: x[1], reverse=True)[:10]
-                ),
+                "file_types": dict(sorted(file_types.items(), key=lambda x: x[1], reverse=True)[:10]),
             }
         except Exception:
             pass
@@ -275,9 +273,7 @@ class ContextEnhancementMiddleware(AgentMiddleware):
             patterns = {
                 "user_intent": self._detect_user_intent(messages),
                 "technical_level": self._assess_technical_level(messages),
-                "preferred_response_length": self._analyze_response_preferences(
-                    messages
-                ),
+                "preferred_response_length": self._analyze_response_preferences(messages),
                 "topic_keywords": self._extract_keywords(messages),
                 "conversation_style": self._detect_conversation_style(messages),
             }
@@ -294,16 +290,13 @@ class ContextEnhancementMiddleware(AgentMiddleware):
         user_messages = [
             msg
             for msg in messages
-            if (hasattr(msg, "type") and msg.type == "human")
-            or (hasattr(msg, "get") and msg.get("role") == "user")
+            if (hasattr(msg, "type") and msg.type == "human") or (hasattr(msg, "get") and msg.get("role") == "user")
         ]
         if not user_messages:
             return "general"
 
         last_message = (
-            user_messages[-1].content
-            if hasattr(user_messages[-1], "content")
-            else user_messages[-1].get("content", "")
+            user_messages[-1].content if hasattr(user_messages[-1], "content") else user_messages[-1].get("content", "")
         ).lower()
 
         intent_keywords = {
@@ -357,15 +350,13 @@ class ContextEnhancementMiddleware(AgentMiddleware):
         assistant_messages = [
             msg
             for msg in messages
-            if (hasattr(msg, "type") and msg.type == "ai")
-            or (hasattr(msg, "get") and msg.get("role") == "assistant")
+            if (hasattr(msg, "type") and msg.type == "ai") or (hasattr(msg, "get") and msg.get("role") == "assistant")
         ]
         if len(assistant_messages) < 2:
             return "medium"
 
         avg_length = sum(
-            len(msg.content if hasattr(msg, "content") else msg.get("content", ""))
-            for msg in assistant_messages
+            len(msg.content if hasattr(msg, "content") else msg.get("content", "")) for msg in assistant_messages
         ) / len(assistant_messages)
 
         if avg_length < 200:
@@ -413,9 +404,7 @@ class ContextEnhancementMiddleware(AgentMiddleware):
             ]
         ).lower()
 
-        found_keywords = [
-            keyword for keyword in tech_keywords if keyword in all_content
-        ]
+        found_keywords = [keyword for keyword in tech_keywords if keyword in all_content]
 
         return found_keywords[:10]  # 限制数量
 
@@ -424,27 +413,20 @@ class ContextEnhancementMiddleware(AgentMiddleware):
         user_messages = [
             msg
             for msg in messages
-            if (hasattr(msg, "type") and msg.type == "human")
-            or (hasattr(msg, "get") and msg.get("role") == "user")
+            if (hasattr(msg, "type") and msg.type == "human") or (hasattr(msg, "get") and msg.get("role") == "user")
         ]
         if not user_messages:
             return "professional"
 
         last_message = (
-            user_messages[-1].content
-            if hasattr(user_messages[-1], "content")
-            else user_messages[-1].get("content", "")
+            user_messages[-1].content if hasattr(user_messages[-1], "content") else user_messages[-1].get("content", "")
         )
 
         informal_indicators = ["!", "哈", "呵呵", "哈哈", "😊", "👍", "谢谢"]
         formal_indicators = ["请", "请问", "能否", "可否", "感谢"]
 
-        informal_count = sum(
-            1 for indicator in informal_indicators if indicator in last_message
-        )
-        formal_count = sum(
-            1 for indicator in formal_indicators if indicator in last_message
-        )
+        informal_count = sum(1 for indicator in informal_indicators if indicator in last_message)
+        formal_count = sum(1 for indicator in formal_indicators if indicator in last_message)
 
         if informal_count > formal_count:
             return "casual"
@@ -464,31 +446,34 @@ class ContextEnhancementMiddleware(AgentMiddleware):
             if project_info:
                 context_parts.append("## 项目上下文")
                 context_parts.append(f"- 项目类型: {project_info.get('type', '未知')}")
-                context_parts.append(
-                    f"- 编程语言: {', '.join(project_info.get('languages', []))}"
-                )
-                context_parts.append(
-                    f"- 检测框架: {', '.join(project_info.get('frameworks', []))}"
-                )
-                context_parts.append(
-                    f"- 文件统计: {project_info.get('project_stats', {}).get('file_count', 0)} 个文件"
-                )
+                context_parts.append(f"- 编程语言: {', '.join(project_info.get('languages', []))}")
+                context_parts.append(f"- 检测框架: {', '.join(project_info.get('frameworks', []))}")
+                context_parts.append(f"- 文件统计: {project_info.get('project_stats', {}).get('file_count', 0)} 个文件")
 
         # 2. 对话模式
         if self.enable_conversation_enhancement:
             messages = request.state.get("messages", [])
-            conversation_patterns = self._analyze_conversation_patterns(messages)
+            # Convert messages to dict format if needed
+            messages_dict: list[dict[Any, Any]] = []
+            for msg in messages:
+                if isinstance(msg, dict):
+                    messages_dict.append(msg)
+                else:
+                    # Convert message object to dict
+                    msg_dict: dict[Any, Any] = {}
+                    if hasattr(msg, "content"):
+                        msg_dict["content"] = msg.content
+                    if hasattr(msg, "type"):
+                        msg_dict["type"] = msg.type
+                    if hasattr(msg, "role"):
+                        msg_dict["role"] = msg.role
+                    messages_dict.append(msg_dict)
+            conversation_patterns = self._analyze_conversation_patterns(messages_dict)
             if conversation_patterns:
                 context_parts.append("\n## 对话上下文")
-                context_parts.append(
-                    f"- 用户意图: {conversation_patterns.get('user_intent', 'general')}"
-                )
-                context_parts.append(
-                    f"- 技术水平: {conversation_patterns.get('technical_level', 'intermediate')}"
-                )
-                context_parts.append(
-                    f"- 响应偏好: {conversation_patterns.get('preferred_response_length', 'medium')}"
-                )
+                context_parts.append(f"- 用户意图: {conversation_patterns.get('user_intent', 'general')}")
+                context_parts.append(f"- 技术水平: {conversation_patterns.get('technical_level', 'intermediate')}")
+                context_parts.append(f"- 响应偏好: {conversation_patterns.get('preferred_response_length', 'medium')}")
 
                 keywords = conversation_patterns.get("topic_keywords", [])
                 if keywords:
@@ -504,9 +489,9 @@ class ContextEnhancementMiddleware(AgentMiddleware):
 
     def before_agent(
         self,
-        state: ContextEnhancementState,
+        state: AgentState[Any],  # type: ignore[override]
         runtime,
-    ) -> ContextEnhancementState:
+    ) -> dict[str, Any]:  # type: ignore[override]
         """在代理执行前初始化上下文增强"""
         enhanced_context = {
             "project_analyzed": self.enable_project_analysis,
@@ -520,13 +505,14 @@ class ContextEnhancementMiddleware(AgentMiddleware):
             "project_info": {},
             "user_preferences": {},
             "conversation_context": {},
+            "messages": [],
         }
 
     async def abefore_agent(
         self,
-        state: ContextEnhancementState,
+        state: AgentState[Any],  # type: ignore[override]
         runtime,
-    ) -> ContextEnhancementState:
+    ) -> dict[str, Any]:  # type: ignore[override]
         """异步：在代理执行前初始化上下文增强"""
         return self.before_agent(state, runtime)
 
@@ -543,11 +529,9 @@ class ContextEnhancementMiddleware(AgentMiddleware):
         # 注入到系统提示中
         if context_enhancement:
             if request.system_prompt:
-                request.system_prompt = (
-                    f"{context_enhancement}\n\n{request.system_prompt}"
-                )
+                request.system_prompt = f"{context_enhancement}\n\n{request.system_prompt}"  # type: ignore[misc, assignment]
             else:
-                request.system_prompt = context_enhancement
+                request.system_prompt = context_enhancement  # type: ignore[misc, assignment]
 
         # 执行原始请求
         return handler(request)
@@ -565,15 +549,9 @@ class ContextEnhancementMiddleware(AgentMiddleware):
         # 注入到系统提示中
         if context_enhancement:
             if request.system_prompt:
-                request.system_prompt = (
-                    f"{context_enhancement}\n\n{request.system_prompt}"
-                )
+                request.system_prompt = f"{context_enhancement}\n\n{request.system_prompt}"  # type: ignore[misc, assignment]
             else:
-                request.system_prompt = context_enhancement
+                request.system_prompt = context_enhancement  # type: ignore[misc, assignment]
 
         # 执行原始请求
         return await handler(request)
-
-
-# 添加缺少的import
-import time

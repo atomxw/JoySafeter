@@ -3,6 +3,7 @@ AuthSession Repository
 
 管理会话记录（drizzle `session` 表）。
 """
+
 from datetime import datetime
 from typing import Optional
 
@@ -10,6 +11,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.auth import AuthSession
+
 from .base import BaseRepository
 
 
@@ -27,11 +29,10 @@ class AuthSessionRepository(BaseRepository[AuthSession]):
         """根据 token 删除会话，返回删除行数"""
         result = await self.db.execute(delete(AuthSession).where(AuthSession.token == token))
         await self.db.flush()
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0) or 0
 
     async def purge_expired(self, now: datetime) -> int:
         """清理过期会话，返回删除行数"""
         result = await self.db.execute(delete(AuthSession).where(AuthSession.expires_at < now))
         await self.db.flush()
-        return result.rowcount or 0
-
+        return getattr(result, "rowcount", 0) or 0

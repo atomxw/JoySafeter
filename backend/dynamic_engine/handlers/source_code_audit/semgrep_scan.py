@@ -8,7 +8,7 @@ import json
 import logging
 import os
 import tempfile
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
@@ -23,8 +23,8 @@ class SemgrepHandler(AbstractHandler):
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['semgrep']
+        """Handler related commands"""
+        return ["semgrep"]
 
     def handle(self, data: Dict) -> Any:
         """
@@ -58,9 +58,7 @@ class SemgrepHandler(AbstractHandler):
                 return {"error": f"Target path does not exist: {target_path}", "findings": []}
 
             # Build command
-            output_file = tempfile.NamedTemporaryFile(
-                mode='w', suffix='.json', delete=False
-            )
+            output_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
             output_path = output_file.name
             output_file.close()
 
@@ -87,7 +85,7 @@ class SemgrepHandler(AbstractHandler):
             logger.debug(f"Command: {command}")
 
             # Execute scan
-            result = execute_command(command, timeout=timeout + 60)
+            execute_command(command, timeout=timeout + 60)
 
             # Parse JSON output
             findings = []
@@ -95,7 +93,7 @@ class SemgrepHandler(AbstractHandler):
 
             if os.path.exists(output_path):
                 try:
-                    with open(output_path, 'r') as f:
+                    with open(output_path, "r") as f:
                         raw_report = json.load(f)
 
                     # Extract and normalize findings

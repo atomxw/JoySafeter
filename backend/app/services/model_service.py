@@ -1,6 +1,7 @@
 """
 模型服务
 """
+
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -71,7 +72,7 @@ class ModelService(BaseService):
                 continue
 
             # 检查供应商是否支持该模型类型
-            supported_types = provider.supported_model_types or []
+            supported_types: list[str] = provider.supported_model_types or []  # type: ignore[assignment]
             if model_type.value not in supported_types:
                 continue
 
@@ -86,16 +87,13 @@ class ModelService(BaseService):
             if provider_instance:
                 # 获取该 provider 的凭据（如果有）
                 provider_credentials = credentials_dict.get(provider.name)
-                
+
                 # 获取模型列表
                 model_list = provider_instance.get_model_list(model_type, provider_credentials)
-                
+
                 # 在模型列表中查找匹配的模型
-                matched_model = next(
-                    (m for m in model_list if m.get("name") == instance.model_name),
-                    None
-                )
-                
+                matched_model = next((m for m in model_list if m.get("name") == instance.model_name), None)
+
                 if matched_model:
                     display_name = matched_model.get("display_name", instance.model_name)
                     description = matched_model.get("description", "")
@@ -151,14 +149,16 @@ class ModelService(BaseService):
                 await self.db.flush()
 
         # 创建模型实例配置
-        instance = await self.repo.create({
-            "user_id": user_id,
-            "workspace_id": workspace_id,
-            "provider_id": provider.id,
-            "model_name": model_name,
-            "model_parameters": model_parameters or {},
-            "is_default": is_default,
-        })
+        instance = await self.repo.create(
+            {
+                "user_id": user_id,
+                "workspace_id": workspace_id,
+                "provider_id": provider.id,
+                "model_name": model_name,
+                "model_parameters": model_parameters or {},
+                "is_default": is_default,
+            }
+        )
 
         await self.commit()
 
@@ -173,12 +173,17 @@ class ModelService(BaseService):
                 )
                 if credentials:
                     from app.core.settings import set_default_model_config
-                    set_default_model_config({
-                        "model": model_name,
-                        "api_key": credentials.get("api_key", ""),
-                        "base_url": credentials.get("base_url"),
-                        "timeout": instance.model_parameters.get("timeout", 30) if instance.model_parameters else 30,
-                    })
+
+                    set_default_model_config(
+                        {
+                            "model": model_name,
+                            "api_key": credentials.get("api_key", ""),
+                            "base_url": credentials.get("base_url"),
+                            "timeout": instance.model_parameters.get("timeout", 30)
+                            if instance.model_parameters
+                            else 30,
+                        }
+                    )
             except Exception as e:
                 # 缓存更新失败不影响主要功能，只记录日志
                 print(f"Warning: Failed to update model cache: {e}")
@@ -243,12 +248,17 @@ class ModelService(BaseService):
                 )
                 if credentials:
                     from app.core.settings import set_default_model_config
-                    set_default_model_config({
-                        "model": model_name,
-                        "api_key": credentials.get("api_key", ""),
-                        "base_url": credentials.get("base_url"),
-                        "timeout": instance.model_parameters.get("timeout", 30) if instance.model_parameters else 30,
-                    })
+
+                    set_default_model_config(
+                        {
+                            "model": model_name,
+                            "api_key": credentials.get("api_key", ""),
+                            "base_url": credentials.get("base_url"),
+                            "timeout": instance.model_parameters.get("timeout", 30)
+                            if instance.model_parameters
+                            else 30,
+                        }
+                    )
             except Exception as e:
                 # 缓存更新失败不影响主要功能，只记录日志
                 print(f"Warning: Failed to update model cache: {e}")
@@ -256,6 +266,7 @@ class ModelService(BaseService):
             # 取消默认状态时清除缓存
             try:
                 from app.core.settings import clear_default_model_config
+
                 clear_default_model_config()
             except Exception as e:
                 print(f"Warning: Failed to clear model cache: {e}")
@@ -376,12 +387,12 @@ class ModelService(BaseService):
         - 根据实例的 provider 和参数，通过 create_model_instance 创建模型
         """
         from loguru import logger
-        
+
         logger.debug(
             f"[ModelService.get_runtime_model_by_name] Looking up model | "
             f"model_name={model_name} | workspace_id={workspace_id}"
         )
-        
+
         # 获取模型实例配置（所有用户和工作空间可见）
         instance = await self.repo.get_by_name(model_name, workspace_id)
 
@@ -397,7 +408,7 @@ class ModelService(BaseService):
             raise NotFoundException(
                 f"模型实例不存在: {model_name}。可用的模型: {', '.join(available_model_names[:10])}"
             )
-        
+
         logger.debug(
             f"[ModelService.get_runtime_model_by_name] Found model instance | "
             f"model_name={instance.model_name} | provider={instance.provider.name}"
@@ -482,4 +493,7 @@ class ModelService(BaseService):
         response = await model.ainvoke(input_text)
 
         # 返回模型输出内容
-        return response.content
+        content = response.content if hasattr(response, "content") else str(response)
+        if isinstance(content, list):
+            return " ".join(str(item) for item in content)
+        return str(content)

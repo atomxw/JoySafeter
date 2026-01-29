@@ -37,10 +37,10 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
-from app.schemas.common import SessionMessageResponse, SessionCreate, SessionResponse
-from app.services.session_service import SessionService
 from app.common.dependencies import CurrentUser
+from app.core.database import get_db
+from app.schemas.common import SessionCreate, SessionMessageResponse, SessionResponse
+from app.services.session_service import SessionService
 
 router = APIRouter()
 
@@ -103,9 +103,7 @@ async def update_session_title(
 ):
     """Update session title."""
     try:
-        updated_session = await session_service.update_session_title(
-            session_id, title, user_id=current_user.id
-        )
+        updated_session = await session_service.update_session_title(session_id, title, user_id=current_user.id)
         if not updated_session:
             raise HTTPException(status_code=404, detail="Session not found")
         return updated_session
@@ -138,9 +136,7 @@ async def get_session_messages(
 ):
     """Get messages for a session."""
     try:
-        messages = await session_service.get_session_messages(
-            session_id, limit, user_id=current_user.id
-        )
+        messages = await session_service.get_session_messages(session_id, limit, user_id=current_user.id)
         return [
             SessionMessageResponse(
                 id=msg.id,

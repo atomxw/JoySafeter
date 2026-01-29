@@ -1,25 +1,12 @@
 import logging
-import math
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
-from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Path, Query, Request
 from fastapi.routing import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
-from app.common.dependencies import get_current_user
-from app.models.auth import AuthUser as User
-from app.schemas.memory import UserMemory
-from app.api.v1.memory.schemas import (
-    DeleteMemoriesRequest,
-    OptimizeMemoriesRequest,
-    OptimizeMemoriesResponse,
-    UserMemoryCreateSchema,
-    UserMemorySchema,
-    UserStatsSchema,
-)
 from app.api.schemas import (
     BadRequestResponse,
     InternalServerErrorResponse,
@@ -30,6 +17,17 @@ from app.api.schemas import (
     UnauthenticatedResponse,
     ValidationErrorResponse,
 )
+from app.api.v1.memory.schemas import (
+    DeleteMemoriesRequest,
+    OptimizeMemoriesRequest,
+    OptimizeMemoriesResponse,
+    UserMemoryCreateSchema,
+    UserMemorySchema,
+)
+from app.common.dependencies import get_current_user
+from app.core.database import get_db
+from app.models.auth import AuthUser as User
+from app.schemas.memory import UserMemory
 from app.services.memory_service import MemoryService
 
 logger = logging.getLogger(__name__)
@@ -66,6 +64,7 @@ def _normalize_memory_dict(mem: Dict[str, Any]) -> Dict[str, Any]:
     if "user_id" in norm and norm["user_id"] is not None:
         norm["user_id"] = str(norm["user_id"])
     return norm
+
 
 def parse_topics(
     topics: Optional[str] = Query(
@@ -370,8 +369,8 @@ async def optimize_memories(
 ) -> OptimizeMemoriesResponse:
     """Optimize user memories using the default summarize strategy."""
     from app.core.agent.memory.manager import MemoryManager
-    from app.core.agent.memory.strategies.types import MemoryOptimizationStrategyType
     from app.core.agent.memory.strategies.summarize import SummarizeStrategy
+    from app.core.agent.memory.strategies.types import MemoryOptimizationStrategyType
 
     try:
         # Create memory manager with MemoryService
@@ -402,7 +401,9 @@ async def optimize_memories(
 
         # Calculate statistics (clamp to 0 when summarization increases tokens)
         tokens_saved = max(0, tokens_before - tokens_after)
-        reduction_percentage = max(0.0, (tokens_before - tokens_after) / tokens_before * 100.0) if tokens_before > 0 else 0.0
+        reduction_percentage = (
+            max(0.0, (tokens_before - tokens_after) / tokens_before * 100.0) if tokens_before > 0 else 0.0
+        )
 
         # Convert to schema objects
         optimized_memory_schemas = [
@@ -413,7 +414,9 @@ async def optimize_memories(
                 agent_id=mem.agent_id,
                 team_id=mem.team_id,
                 user_id=mem.user_id,
-                updated_at=datetime.fromtimestamp(mem.updated_at, tz=timezone.utc) if isinstance(mem.updated_at, (int, float)) else mem.updated_at,  # type: ignore
+                updated_at=datetime.fromtimestamp(mem.updated_at, tz=timezone.utc)
+                if isinstance(mem.updated_at, (int, float))
+                else mem.updated_at,  # type: ignore
             )
             for mem in optimized_memories
         ]

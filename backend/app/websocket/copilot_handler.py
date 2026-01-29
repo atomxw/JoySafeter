@@ -3,13 +3,13 @@ WebSocket handler for Copilot real-time streaming.
 Subscribes to Redis Pub/Sub and forwards events to WebSocket clients.
 """
 
-import json
 import asyncio
-from typing import Optional
-from loguru import logger
+import json
 
 from fastapi import WebSocket, WebSocketDisconnect
+from loguru import logger
 from starlette.websockets import WebSocketState
+
 from app.core.redis import RedisClient
 
 
@@ -22,16 +22,17 @@ class CopilotWebSocketHandler:
     def _is_websocket_connected(self, websocket: WebSocket) -> bool:
         """
         Check if WebSocket connection is still active and connected.
-        
+
         Args:
             websocket: WebSocket connection to check
-            
+
         Returns:
             True if connection is active, False otherwise
         """
         try:
             # Check WebSocket state - CONNECTED means it's accepted and active
-            return websocket.client_state == WebSocketState.CONNECTED
+            is_connected = websocket.client_state == WebSocketState.CONNECTED
+            return bool(is_connected)
         except Exception:
             # If we can't check the state, assume disconnected
             return False
@@ -39,12 +40,12 @@ class CopilotWebSocketHandler:
     async def _safe_send_text(self, websocket: WebSocket, text: str, session_id: str) -> bool:
         """
         Safely send text to WebSocket with connection state checking.
-        
+
         Args:
             websocket: WebSocket connection
             text: Text to send
             session_id: Session ID for logging
-            
+
         Returns:
             True if message was sent successfully, False if connection is closed
         """
@@ -52,7 +53,7 @@ class CopilotWebSocketHandler:
         if not self._is_websocket_connected(websocket):
             logger.warning(f"WebSocket not connected, cannot send message: session_id={session_id}")
             return False
-        
+
         try:
             await websocket.send_text(text)
             return True
@@ -72,7 +73,7 @@ class CopilotWebSocketHandler:
     async def handle_connection(self, websocket: WebSocket, session_id: str):
         """
         Handle WebSocket connection for Copilot session subscription.
-        
+
         Args:
             websocket: WebSocket connection
             session_id: Copilot session ID to subscribe to
@@ -94,7 +95,7 @@ class CopilotWebSocketHandler:
 
         pubsub = None
         channel = f"copilot:session:{session_id}:pubsub"
-        
+
         try:
             # Subscribe to Redis Pub/Sub channel
             # Create Redis pubsub subscriber
@@ -109,7 +110,7 @@ class CopilotWebSocketHandler:
 
             pubsub = redis_client.pubsub()
             await pubsub.subscribe(channel)
-            
+
             # Note: We do NOT send existing content here to avoid duplicates.
             # The streaming process will send all content events through Pub/Sub,
             # and if users need historical content, they should load it from the database.
@@ -118,19 +119,12 @@ class CopilotWebSocketHandler:
             while self._is_websocket_connected(websocket):
                 try:
                     # Create tasks for both Redis messages and WebSocket messages
-                    redis_task = asyncio.create_task(
-                        asyncio.wait_for(pubsub.get_message(), timeout=1.0)
-                    )
-                    ws_task = asyncio.create_task(
-                        asyncio.wait_for(websocket.receive_text(), timeout=1.0)
-                    )
-                    
+                    redis_task = asyncio.create_task(asyncio.wait_for(pubsub.get_message(), timeout=1.0))
+                    ws_task = asyncio.create_task(asyncio.wait_for(websocket.receive_text(), timeout=1.0))
+
                     # Wait for either Redis message or WebSocket message
-                    done, pending = await asyncio.wait(
-                        [redis_task, ws_task],
-                        return_when=asyncio.FIRST_COMPLETED
-                    )
-                    
+                    done, pending = await asyncio.wait([redis_task, ws_task], return_when=asyncio.FIRST_COMPLETED)
+
                     # Cancel pending tasks
                     for task in pending:
                         task.cancel()
@@ -138,7 +132,7 @@ class CopilotWebSocketHandler:
                             await task
                         except (asyncio.CancelledError, Exception):
                             pass
-                    
+
                     # Handle Redis messages
                     if redis_task in done:
                         try:
@@ -148,14 +142,14 @@ class CopilotWebSocketHandler:
                                     # Parse and forward event to WebSocket
                                     event = json.loads(message["data"])
                                     event_json = json.dumps(event, ensure_ascii=False)
-                                    
+
                                     # Use safe send method
                                     sent = await self._safe_send_text(websocket, event_json, session_id)
                                     if not sent:
                                         # Connection lost, exit loop
                                         logger.info(f"Connection lost while sending event: session_id={session_id}")
                                         break
-                                    
+
                                     # Close connection if done
                                     if event.get("type") == "done":
                                         logger.info(f"Copilot session completed: session_id={session_id}")
@@ -165,8 +159,10 @@ class CopilotWebSocketHandler:
                                             pass
                                         break
                                     elif event.get("type") == "error":
-                                        error_msg = event.get('message', 'Unknown error')
-                                        logger.error(f"Copilot session error: session_id={session_id}, error={error_msg}")
+                                        error_msg = event.get("message", "Unknown error")
+                                        logger.error(
+                                            f"Copilot session error: session_id={session_id}, error={error_msg}"
+                                        )
                                         try:
                                             await websocket.close(code=1011, reason=f"Error: {error_msg}")
                                         except Exception:
@@ -182,7 +178,7 @@ class CopilotWebSocketHandler:
                             # Check if connection is still valid
                             if not self._is_websocket_connected(websocket):
                                 break
-                    
+
                     # Handle WebSocket client messages (ping/heartbeat)
                     if ws_task in done:
                         try:
@@ -216,7 +212,7 @@ class CopilotWebSocketHandler:
                             # If connection is lost, exit loop
                             if not self._is_websocket_connected(websocket):
                                 break
-                    
+
                 except WebSocketDisconnect:
                     logger.info(f"WebSocket disconnected: session_id={session_id}")
                     break

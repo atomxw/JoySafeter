@@ -3,21 +3,18 @@ Scan routes for whitebox scanning feature
 """
 
 import io
-import logging
 import os
 import shutil
 import tempfile
 import zipfile
 from datetime import datetime
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, File, Query, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from loguru import logger
 
 from app.dynamic_agent.core.scanner.manager import ScannerManager
 from app.dynamic_agent.models.scan import ScanJobResponse, ScanJobStatus, ScanStatus
-
-from loguru import logger
 
 router = APIRouter(prefix="/scan", tags=["scan"])
 
@@ -34,7 +31,7 @@ SCAN_JOBS = {}
 )
 async def upload_and_scan(
     file: UploadFile = File(...),
-    max_file_size: int = Query(10 * 1024 * 1024, description="Maximum file size in bytes (default: 10MB)")
+    max_file_size: int = Query(10 * 1024 * 1024, description="Maximum file size in bytes (default: 10MB)"),
 ):
     """
     Upload a ZIP file and start an async vulnerability scan.
@@ -50,13 +47,13 @@ async def upload_and_scan(
         HTTPException: If file is invalid or too large
     """
     # Validate file type
-    if not file.filename or not file.filename.lower().endswith('.zip'):
+    if not file.filename or not file.filename.lower().endswith(".zip"):
         logger.error(f"Invalid file type: {file.filename}")
         raise HTTPException(status_code=400, detail="File must be a ZIP archive")
 
     # Check file size
     # Read first chunk to check size
-    chunk = await file.read(1024)
+    await file.read(1024)
     await file.seek(0)
 
     # For simplicity, we'll check size after reading the entire file
@@ -66,8 +63,7 @@ async def upload_and_scan(
     if len(contents) > max_file_size:
         logger.error(f"File too large: {len(contents)} bytes (max: {max_file_size})")
         raise HTTPException(
-            status_code=400,
-            detail=f"File too large. Maximum size is {max_file_size / (1024*1024):.1f}MB"
+            status_code=400, detail=f"File too large. Maximum size is {max_file_size / (1024 * 1024):.1f}MB"
         )
 
     # Validate ZIP file
@@ -95,7 +91,7 @@ async def upload_and_scan(
     temp_path = os.path.join(temp_dir, f"{job_id}.zip")
 
     try:
-        with open(temp_path, 'wb') as f:
+        with open(temp_path, "wb") as f:
             f.write(contents)
 
         SCAN_JOBS[job_id]["file_path"] = temp_path
@@ -103,15 +99,12 @@ async def upload_and_scan(
         # Start scan in background
         # In production, this should be Celery or similar
         import asyncio
+
         asyncio.create_task(run_scan_async(job_id, temp_path))
 
         logger.info(f"✓ Started scan job {job_id} for file {file.filename}")
 
-        return ScanJobResponse(
-            job_id=job_id,
-            status=ScanStatus.QUEUED,
-            message=f"Scan started for {file.filename}"
-        )
+        return ScanJobResponse(job_id=job_id, status=ScanStatus.QUEUED, message=f"Scan started for {file.filename}")
 
     except Exception as e:
         logger.error(f"Failed to start scan: {e}")
@@ -146,19 +139,29 @@ async def get_scan_status(job_id: UUID):
     job = SCAN_JOBS[job_id]
 
     # Build response
+    progress_val = job.get("progress", 0)
+    # Convert to int safely
+    if isinstance(progress_val, (int, float)):
+        progress_int = int(progress_val)
+    else:
+        progress_int = 0
+
     response = ScanJobStatus(
         job_id=job_id,
         status=ScanStatus(job["status"]),
-        progress=job["progress"],
+        progress=progress_int,
     )
 
     # Add error if failed
-    if job["status"] == ScanStatus.FAILED and job["error"]:
-        response.error = job["error"]
+    if job["status"] == ScanStatus.FAILED and job.get("error"):
+        error_val = job["error"]
+        response.error = str(error_val) if error_val is not None else None
 
     # Add result if completed
-    if job["status"] == ScanStatus.COMPLETED and job["result"]:
-        response.result = job["result"]
+    if job["status"] == ScanStatus.COMPLETED and job.get("result"):
+        result_val = job["result"]
+        # result is Optional[ScanReport], keep as is if it's already the right type
+        response.result = result_val  # type: ignore[assignment]
 
     return response
 
@@ -216,4 +219,3 @@ async def run_scan_async(job_id: UUID, zip_path: str):
                 logger.info(f"Scan {job_id}: Cleaned up temporary files")
             except Exception as e:
                 logger.error(f"Scan {job_id}: Cleanup failed - {e}")
-

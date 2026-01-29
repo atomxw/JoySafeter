@@ -5,9 +5,10 @@ This module provides a comprehensive tool registry with classification,
 priority management, and dynamic selection capabilities.
 """
 
-from typing import Dict, List, Optional, Set
-from enum import Enum
 from dataclasses import dataclass, field
+from enum import Enum
+from typing import Dict, List, Optional, Set
+
 from langchain_core.tools import BaseTool
 
 ToolCategory = str
@@ -15,11 +16,12 @@ ToolCategory = str
 
 class ToolPriority(str, Enum):
     """Tool priority levels."""
-    CRITICAL = 'critical'  # Always include if relevant
-    HIGH = 'high'  # Include in most scenarios
-    MEDIUM = 'medium' # Include based on context
-    LOW = 'low'  # Include only if space available
-    OPTIONAL = 'optional'  # Rarely include
+
+    CRITICAL = "critical"  # Always include if relevant
+    HIGH = "high"  # Include in most scenarios
+    MEDIUM = "medium"  # Include based on context
+    LOW = "low"  # Include only if space available
+    OPTIONAL = "optional"  # Rarely include
 
 
 ToolPriorityScore = {
@@ -34,10 +36,11 @@ ToolPriorityScore = {
 @dataclass
 class ToolMetadata:
     """Metadata for a registered tool."""
+
     name: str
     category: ToolCategory
     description: str
-    priority: ToolPriority = None
+    priority: Optional[ToolPriority] = None
     keywords: Set[str] = field(default_factory=set)
     dependencies: Set[str] = field(default_factory=set)  # Other tool names
     scenarios: Set[str] = field(default_factory=set)  # Use case scenarios
@@ -98,6 +101,56 @@ class ToolRegistry:
     def get_all_tools(self) -> List[str]:
         """Get all registered tool names."""
         return list(self._tools_obj.keys())
+
+    def search(
+        self,
+        keywords: Optional[Set[str]] = None,
+        categories: Optional[List[ToolCategory]] = None,
+        min_priority_score: Optional[ToolPriority] = None,
+        scenario: Optional[str] = None,
+    ) -> List[ToolMetadata]:
+        """Search tools by keywords, categories, priority, and scenario."""
+        candidates: List[ToolMetadata] = []
+
+        # Filter by categories
+        if categories:
+            for category in categories:
+                candidates.extend(self.get_tool_meta_by_category(category))
+        else:
+            # Get all tools
+            candidates = list(self._tools_meta.values())
+
+        # Filter by keywords
+        if keywords:
+            filtered = []
+            for tool in candidates:
+                if tool.matches_keywords(keywords) > 0:
+                    filtered.append(tool)
+            candidates = filtered
+
+        # Filter by scenario
+        if scenario:
+            filtered = []
+            for tool in candidates:
+                if tool.matches_scenario(scenario):
+                    filtered.append(tool)
+            candidates = filtered
+
+        # Filter by priority
+        if min_priority_score:
+            min_score = ToolPriorityScore.get(min_priority_score, 0)
+            filtered = []
+            for tool in candidates:
+                tool_score = ToolPriorityScore.get(tool.priority, 0) if tool.priority else 0
+                if tool_score >= min_score:
+                    filtered.append(tool)
+            candidates = filtered
+
+        return candidates
+
+    def get_by_category(self, category: ToolCategory) -> List[ToolMetadata]:
+        """Get tools by category (alias for get_tool_meta_by_category)."""
+        return self.get_tool_meta_by_category(category)
 
     def clear(self):
         """Clear all tool metadata."""

@@ -1,21 +1,22 @@
-from typing import Any, Dict
 import logging
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
 
 logger = logging.getLogger(__name__)
 
+
 class XxdHandler(AbstractHandler):
     """Handler for xxd functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['xxd']
-    
+        """Handler related commands"""
+        return ["xxd"]
+
     def handle(self, data: Dict) -> Any:
         """Execute xxd with enhanced logging"""
         try:
@@ -25,11 +26,7 @@ class XxdHandler(AbstractHandler):
             additional_args = data.get("additional_args", "")
             if not file_path:
                 logger.warning("🔧 XXD called without file_path parameter")
-                return {
-    
-                    "error": "File path parameter is required"
-                
-                }
+                return {"error": "File path parameter is required"}
             command = f"xxd -s {offset}"
             if length:
                 command += f" -l {length}"
@@ -42,8 +39,4 @@ class XxdHandler(AbstractHandler):
             return result
         except Exception as e:
             logger.error(f"💥 Error in xxd endpoint: {str(e)}")
-            return {
-    
-                "error": f"Server error: {str(e)}"
-            
-            }
+            return {"error": f"Server error: {str(e)}"}

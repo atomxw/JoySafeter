@@ -7,17 +7,17 @@ Simple demonstration of using MCP client to connect to server and call tools.
 import asyncio
 import json
 import sys
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
 
 # Add backend to path
 backend_path = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_path))
 
-from mcp import ClientSession
-from mcp.client.stdio import stdio_client
-from mcp.client.sse import sse_client
-from mcp.client.streamable_http import streamablehttp_client
+from mcp import ClientSession  # noqa: E402
+from mcp.client.sse import sse_client  # noqa: E402
+from mcp.client.stdio import stdio_client  # noqa: E402
+from mcp.client.streamable_http import streamablehttp_client  # noqa: E402
 
 
 async def demo_stdio():
@@ -73,11 +73,11 @@ async def demo_sse(host: str = "http://localhost:8000/sse"):
 
                 while True:
                     tool_name = input("Enter tool name: ")
-                    input_json = input('Enter kwargs: ')
+                    input_json = input("Enter kwargs: ")
                     kwargs = {}
                     try:
                         kwargs = json.loads(input_json)
-                    except Exception as e:
+                    except Exception:
                         try:
                             kwargs = eval(input_json)
                         except Exception as e:
@@ -96,11 +96,7 @@ async def demo_streamable_http():
 
     try:
         async with streamablehttp_client("http://localhost:8000/mcp") as streams:
-            async with ClientSession(
-                streams[0],
-                streams[1],
-                read_timeout_seconds=timedelta(seconds=30)
-            ) as session:
+            async with ClientSession(streams[0], streams[1], read_timeout_seconds=timedelta(seconds=30)) as session:
                 # Initialize session
                 await session.initialize()
 
@@ -111,10 +107,9 @@ async def demo_streamable_http():
                     print(f"  - {tool.name}")
 
                 # Call a tool
-                result = await session.call_tool("execute_shell_command", {
-                    "command": "echo",
-                    "args": ["Hello from MCP!"]
-                })
+                result = await session.call_tool(
+                    "execute_shell_command", {"command": "echo", "args": ["Hello from MCP!"]}
+                )
                 print(f"\nTool result: {result}")
 
     except Exception as e:

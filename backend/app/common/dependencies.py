@@ -1,29 +1,36 @@
 """
 公共依赖项
 """
+
 import uuid
-from typing import Annotated, Optional, Callable, Awaitable
+from collections.abc import AsyncGenerator
+from typing import Annotated, Optional
 
-from fastapi import Depends, Request, Header
+from fastapi import Depends, Header, Request
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.exceptions import ForbiddenException, NotFoundException, UnauthorizedException
 from app.core.database import get_db
 from app.core.security import decode_token, verify_csrf_token
 from app.core.settings import settings
 from app.models.auth import AuthUser as User
+from app.models.organization import Member as OrgMember
 from app.models.workspace import WorkspaceMemberRole
 from app.repositories.workspace import WorkspaceMemberRepository, WorkspaceRepository
-from app.models.organization import Member as OrgMember
-from app.common.exceptions import UnauthorizedException, ForbiddenException, NotFoundException
 from app.services.auth_session_service import AuthSessionService
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
-async def get_db_session() -> AsyncSession:
+def get_optional_request(request: Request) -> Request:
+    """Dependency to provide Request object."""
+    return request
+
+
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """获取数据库会话"""
     async for session in get_db():
         yield session
@@ -32,7 +39,7 @@ async def get_db_session() -> AsyncSession:
 async def get_current_user(
     token: Annotated[Optional[str], Depends(oauth2_scheme_optional)],
     db: AsyncSession = Depends(get_db),
-    request: Request = None,
+    request: Annotated[Request, Depends(get_optional_request)] = None,  # type: ignore[assignment]
 ) -> User:
     """
     获取当前用户（必须登录）
@@ -89,7 +96,7 @@ async def get_current_user(
 async def get_current_user_optional(
     token: Annotated[Optional[str], Depends(oauth2_scheme_optional)],
     db: AsyncSession = Depends(get_db),
-    request: Request = None,
+    request: Annotated[Request, Depends(get_optional_request)] = None,  # type: ignore[assignment]
 ) -> Optional[User]:
     """获取当前用户（可选，未登录返回 None），同时支持 Cookie 里的 token。"""
     cookie_token = None
@@ -135,10 +142,12 @@ async def get_current_user_optional(
 
 def require_roles(*roles: str):
     """角色权限检查装饰器"""
+
     async def check_roles(current_user: User = Depends(get_current_user)):
         if current_user.is_superuser:
             return current_user
         return current_user
+
     return Depends(check_roles)
 
 
@@ -238,6 +247,7 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 # CSRF Protection
 # --------------------------------------------------------------------------- #
 
+
 async def verify_csrf(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -283,4 +293,3 @@ async def verify_csrf(
 
 # 带 CSRF 保护的当前用户类型注解
 CurrentUserWithCSRF = Annotated[User, Depends(verify_csrf)]
-

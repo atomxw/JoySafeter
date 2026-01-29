@@ -3,7 +3,7 @@
 """
 
 import uuid
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -46,9 +46,7 @@ class WorkspaceEnvironment(BaseModel):
 
     workspace: Mapped["Workspace"] = relationship("Workspace", lazy="selectin")
 
-    __table_args__ = (
-        UniqueConstraint("workspace_id", name="workspace_environment_workspace_unique"),
-    )
+    __table_args__ = (UniqueConstraint("workspace_id", name="workspace_environment_workspace_unique"),)
 
 
 class Settings(BaseModel):
@@ -92,4 +90,3 @@ class Settings(BaseModel):
     user: Mapped["AuthUser"] = relationship("AuthUser", lazy="selectin")
 
     __table_args__ = (Index("settings_user_id_idx", "user_id"),)
-

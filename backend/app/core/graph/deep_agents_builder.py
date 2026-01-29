@@ -5,23 +5,21 @@ from typing import TYPE_CHECKING, Any, Optional
 from loguru import logger
 
 if TYPE_CHECKING:
-    from app.core.agent.backends.pydantic_adapter import PydanticSandboxAdapter
+    pass
+# DeepAgents library imports - required
+from deepagents import create_deep_agent
 from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from app.core.graph.base_graph_builder import (
     BaseGraphBuilder,
-    DEFAULT_RECURSION_LIMIT,
 )
-from app.models.graph import GraphNode
-from app.core.graph.deep_agents.backend_manager import DeepAgentsBackendManager
-from app.core.graph.deep_agents.skills_manager import DeepAgentsSkillsManager
-from app.core.graph.deep_agents.node_factory import DeepAgentsNodeBuilder
 from app.core.graph.deep_agents.backend_factory import BackendFactory
+from app.core.graph.deep_agents.backend_manager import DeepAgentsBackendManager
 from app.core.graph.deep_agents.node_config import AgentConfig
-
-# DeepAgents library imports - required
-from deepagents import create_deep_agent, CompiledSubAgent
+from app.core.graph.deep_agents.node_factory import DeepAgentsNodeBuilder
+from app.core.graph.deep_agents.skills_manager import DeepAgentsSkillsManager
+from app.models.graph import GraphNode
 
 # Constants
 LOG_PREFIX = "[DeepAgentsBuilder]"
@@ -37,7 +35,7 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
         self._skills_manager = DeepAgentsSkillsManager(self.user_id)
         self._node_builder = DeepAgentsNodeBuilder(builder=self)
 
-    async def build(self) -> Any:
+    async def build(self) -> CompiledStateGraph[Any, None, Any, Any]:  # type: ignore[override]
         """Build two-level star structure: Root (Manager) → Children (Workers)."""
         if not self.nodes:
             raise ValueError("No nodes provided for DeepAgents graph")
@@ -45,7 +43,8 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
         try:
             await self._setup_shared_backend()
             root_node = self._select_and_validate_root()
-            return await self._build_graph(root_node)
+            result = await self._build_graph(root_node)
+            return result  # type: ignore
         except Exception as e:
             logger.exception(f"{LOG_PREFIX} Build failed: {e}")
             await self._backend_manager.cleanup_shared_backend()
@@ -53,9 +52,7 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
 
     async def _setup_shared_backend(self) -> None:
         """Setup shared Docker backend if needed."""
-        needs_docker = self._backend_manager.should_create_shared_backend(
-            self._skills_manager.has_valid_skills_config
-        )
+        needs_docker = self._backend_manager.should_create_shared_backend(self._skills_manager.has_valid_skills_config)
 
         if needs_docker:
             try:
@@ -85,7 +82,7 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
         root_node = self._select_root_node(root_nodes)
         if not root_node:
             raise ValueError("Cannot select root node - multiple roots without DeepAgents enabled")
-        
+
         return root_node
 
     async def _build_graph(self, root_node: GraphNode) -> Any:
@@ -95,7 +92,7 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
         logger.info(f"{LOG_PREFIX} Building from root: '{root_label}'")
 
         children = self._get_direct_children(root_node)
-        
+
         if not children:
             # Root without children: build as standalone DeepAgent
             if not self._is_deep_agents_enabled(root_node):
@@ -105,12 +102,9 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
             # Root with children: build workers first, then manager
             subagents = []
             for child in children:
-                child_config = await AgentConfig.from_node(child, self, self._node_id_to_name)
-                child_label = child_config.label or child_config.name
+                await AgentConfig.from_node(child, self, self._node_id_to_name)
                 subagents.append(await self._node_builder.build_worker_node(child))
-            final_agent = await self._node_builder.build_manager_node(
-                root_node, root_label, subagents, is_root=True
-            )
+            final_agent = await self._node_builder.build_manager_node(root_node, root_label, subagents, is_root=True)
 
         return self._finalize_agent(final_agent)
 
@@ -131,6 +125,7 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
     def _get_checkpointer(self) -> Any | None:
         """Get checkpointer for root agent."""
         from app.core.agent.checkpointer.checkpointer import get_checkpointer
+
         return get_checkpointer()
 
     def _compile_state_graph(self, agent: StateGraph) -> CompiledStateGraph:
@@ -148,20 +143,22 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
         # Compile StateGraph if needed
         if isinstance(agent, StateGraph):
             agent = self._compile_state_graph(agent)
-        
+
         # Apply runtime configuration
         if isinstance(agent, CompiledStateGraph):
             agent = self._configure_agent(agent)
         elif isinstance(agent, dict):
             raise ValueError("Received dict instead of Runnable - DeepAgents build failed")
-        
+
         # Attach cleanup if shared backend exists
         if agent and self._backend_manager.shared_backend:
             backend_manager = self._backend_manager
+
             async def cleanup():
                 await backend_manager.cleanup_shared_backend()
+
             agent._cleanup_backend = cleanup
-        
+
         return agent
 
     # ==================== Node Configuration Helpers ====================
@@ -174,15 +171,12 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
 
     def has_valid_skills_config(self, skill_ids_raw: Any) -> bool:
         """Check if skills config is valid - for AgentConfig use."""
-        return self._skills_manager.has_valid_skills_config(skill_ids_raw)
+        result = self._skills_manager.has_valid_skills_config(skill_ids_raw)
+        return bool(result) if result is not None else False
 
-    async def get_backend_for_node(
-        self, node: GraphNode, has_skills: bool
-    ) -> Optional[Any]:
+    async def get_backend_for_node(self, node: GraphNode, has_skills: bool) -> Optional[Any]:
         """Get backend for node - for AgentConfig use."""
-        return await self._backend_manager.get_backend_for_node(
-            node, has_skills, self._create_backend_for_node
-        )
+        return await self._backend_manager.get_backend_for_node(node, has_skills, self._create_backend_for_node)
 
     async def preload_skills_to_backend(self, node: GraphNode, backend: Any) -> None:
         """Preload skills to backend - for AgentConfig use."""
@@ -190,7 +184,12 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
 
     def get_skills_paths(self, has_skills: bool, backend: Any) -> Optional[list[str]]:
         """Get skills paths - for AgentConfig use."""
-        return self._skills_manager.get_skills_paths(has_skills, backend)
+        result = self._skills_manager.get_skills_paths(has_skills, backend)
+        if result is None:
+            return None
+        if isinstance(result, list):
+            return [str(item) for item in result]
+        return None
 
     def get_shared_backend(self) -> Optional[Any]:
         """Get shared backend instance - for NodeBuilder use."""
@@ -198,14 +197,18 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
 
     def is_shared_backend_creation_failed(self) -> bool:
         """Check if shared backend creation failed - for NodeBuilder use."""
-        return self._backend_manager.shared_backend_creation_failed
+        result = self._backend_manager.shared_backend_creation_failed
+        return bool(result) if result is not None else False
 
     async def resolve_middleware_for_node(
-        self, node: GraphNode, user_id: Optional[str] = None,
+        self,
+        node: GraphNode,
+        user_id: Optional[str] = None,
         db_session_factory: Optional[Any] = None,
     ) -> list[Any]:
         """Resolve middleware (excludes SkillsMiddleware - handled via skills param)."""
         from app.core.database import async_session_factory as default_factory
+
         user_id = user_id or self.user_id
         db_session_factory = db_session_factory or default_factory
         middleware = []
@@ -228,36 +231,44 @@ class DeepAgentsGraphBuilder(BaseGraphBuilder):
 
     async def _create_backend_for_node(self, node: GraphNode) -> Any:
         """Create backend with fallback - used by backend_manager.get_backend_for_node().
-        
+
         从节点配置中读取 workspace_dir 或 workspaceSubdir，如果没有配置则使用 graph.name。
         """
         # 从节点配置读取自定义子目录名称
         data = node.data or {}
         config = data.get("config", {})
         workspace_subdir = config.get("workspace_dir") or config.get("workspaceSubdir")
-        
+
         # 如果没有配置，使用 graph.name 作为默认值
         if not workspace_subdir:
-            workspace_subdir = self.graph.name if hasattr(self.graph, 'name') and self.graph.name else None
-        
+            workspace_subdir = self.graph.name if hasattr(self.graph, "name") and self.graph.name else None
+
         return BackendFactory.create_backend_with_fallback(
-            node,
-            user_id=self.user_id,
-            workspace_subdir=workspace_subdir
+            node, user_id=self.user_id, workspace_subdir=workspace_subdir
         )
 
     # ==================== DeepAgent Creation ====================
 
     def _create_deep_agent(
-        self, model: Any, system_prompt: str | None, tools: list[Any],
-        subagents: list[Any], middleware: list[Any], name: str,
-        is_root: bool = False, skills: list[str] | None = None,
+        self,
+        model: Any,
+        system_prompt: str | None,
+        tools: list[Any],
+        subagents: list[Any],
+        middleware: list[Any],
+        name: str,
+        is_root: bool = False,
+        skills: list[str] | None = None,
         backend: Any | None = None,
     ) -> Any:
         """Create DeepAgent - returns StateGraph or CompiledStateGraph."""
         kwargs = {
-            "model": model, "system_prompt": system_prompt, "tools": tools,
-            "subagents": subagents, "middleware": middleware, "name": name,
+            "model": model,
+            "system_prompt": system_prompt,
+            "tools": tools,
+            "subagents": subagents,
+            "middleware": middleware,
+            "name": name,
         }
         # Only root agents need checkpointer
         if is_root:

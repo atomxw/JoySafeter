@@ -1,21 +1,22 @@
-from typing import Any, Dict
 import logging
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
 
 logger = logging.getLogger(__name__)
 
+
 class PwninitHandler(AbstractHandler):
     """Handler for pwninit functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['pwninit']
-    
+        """Handler related commands"""
+        return ["pwninit"]
+
     def handle(self, data: Dict) -> Any:
         """Execute pwninit with enhanced logging"""
         try:
@@ -38,7 +39,7 @@ class PwninitHandler(AbstractHandler):
                 command += f" {additional_args}"
             logger.info(f"🔧 Starting pwninit setup: {binary}")
             result = execute_command(command)
-            logger.info(f"📊 pwninit setup completed")
+            logger.info("📊 pwninit setup completed")
             return result
         except Exception as e:
             logger.error(f"💥 Error in pwninit endpoint: {str(e)}")

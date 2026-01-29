@@ -1,21 +1,22 @@
-from typing import Any, Dict
 import logging
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
 
 logger = logging.getLogger(__name__)
 
+
 class RustscanHandler(AbstractHandler):
     """Handler for rustscan functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['rustscan']
-    
+        """Handler related commands"""
+        return ["rustscan"]
+
     def handle(self, data: Dict) -> Any:
         """Execute rustscan with enhanced logging"""
         try:
@@ -33,7 +34,7 @@ class RustscanHandler(AbstractHandler):
             if ports:
                 command += f" -p {ports}"
             if scripts:
-                command += f" -- -sC -sV"
+                command += " -- -sC -sV"
             if additional_args:
                 command += f" {additional_args}"
             logger.info(f"⚡ Starting Rustscan: {target}")

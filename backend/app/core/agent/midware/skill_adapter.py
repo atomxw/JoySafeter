@@ -4,8 +4,7 @@ This adapter allows using deepagents SkillsMiddleware even when skills are store
 by loading them into a temporary StateBackend.
 """
 
-from typing import Optional, List, Any, TYPE_CHECKING
-from loguru import logger
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from langchain.agents.middleware.types import (
     AgentMiddleware,
@@ -13,22 +12,23 @@ from langchain.agents.middleware.types import (
     ModelRequest,
     ModelResponse,
 )
+from loguru import logger
 
 if TYPE_CHECKING:
-    from deepagents.middleware.skills import SkillsMiddleware
     from deepagents.backends.protocol import BackendProtocol
+    from deepagents.middleware.skills import SkillsMiddleware
 
 from app.core.database import async_session_factory
-from app.services.skill_service import SkillService
 from app.core.skill.sandbox_loader import SkillSandboxLoader
+from app.services.skill_service import SkillService
 
 
 class DatabaseSkillAdapter(AgentMiddleware):
     """Adapter: Load skills from database and convert to deepagents SkillsMiddleware format.
-    
+
     This adapter creates a temporary StateBackend, loads skills from database into it,
     and then uses deepagents SkillsMiddleware to provide skill descriptions.
-    
+
     Use this when you need skill descriptions injected but don't have a persistent backend.
     For better performance, use deepagents SkillsMiddleware directly with a persistent backend.
     """
@@ -43,7 +43,7 @@ class DatabaseSkillAdapter(AgentMiddleware):
         backend_factory: Optional[Any] = None,
     ):
         """Initialize DatabaseSkillAdapter.
-        
+
         Args:
             user_id: User ID to filter skills (defaults to None, loads all public skills)
             skill_ids: Optional list of specific skill UUIDs to load
@@ -63,8 +63,8 @@ class DatabaseSkillAdapter(AgentMiddleware):
             return
 
         try:
-            from deepagents.middleware.skills import SkillsMiddleware
             from deepagents.backends.state import StateBackend
+            from deepagents.middleware.skills import SkillsMiddleware
         except ImportError:
             logger.error(
                 "deepagents.middleware.skills or deepagents.backends.state not available. "
@@ -84,7 +84,7 @@ class DatabaseSkillAdapter(AgentMiddleware):
             async with self.db_session_factory() as db:
                 skill_service = SkillService(db)
                 loader = SkillSandboxLoader(
-                    skill_service, 
+                    skill_service,
                     user_id=self.user_id,
                     # Use default path for StateBackend
                 )
@@ -92,11 +92,11 @@ class DatabaseSkillAdapter(AgentMiddleware):
                 # Get effective skills path from loader
                 effective_skills_path = loader._get_skills_base_dir(self._backend)
                 # Ensure path ends with / for SkillsMiddleware
-                skills_source_path = effective_skills_path.rstrip('/') + '/'
+                skills_source_path = effective_skills_path.rstrip("/") + "/"
 
                 if self.skill_ids:
                     await loader.load_skills_to_sandbox(
-                        self.skill_ids, 
+                        self.skill_ids,
                         self._backend,
                         skills_base_dir=effective_skills_path,
                     )
@@ -108,7 +108,7 @@ class DatabaseSkillAdapter(AgentMiddleware):
                     skill_ids = [s.id for s in skills]
                     if skill_ids:
                         await loader.load_skills_to_sandbox(
-                            skill_ids, 
+                            skill_ids,
                             self._backend,
                             skills_base_dir=effective_skills_path,
                         )
@@ -118,34 +118,29 @@ class DatabaseSkillAdapter(AgentMiddleware):
                 backend=self._backend,
                 sources=[skills_source_path],
             )
-            logger.debug(
-                f"DatabaseSkillAdapter: Loaded skills into StateBackend and created SkillsMiddleware"
-            )
+            logger.debug("DatabaseSkillAdapter: Loaded skills into StateBackend and created SkillsMiddleware")
         except Exception as e:
             logger.error(
                 f"DatabaseSkillAdapter: Failed to load skills: {e}",
                 exc_info=True,
             )
 
-    async def abefore_agent(
-        self, state: AgentState, runtime, config
-    ) -> Optional[AgentState]:
+    async def abefore_agent(self, state: AgentState, runtime, config) -> Optional[AgentState]:  # type: ignore[override]
         """Load skills and delegate to SkillsMiddleware."""
         await self._ensure_skills_loaded(runtime)
         if self._skills_middleware is None:
             return None
-        return await self._skills_middleware.abefore_agent(state, runtime, config)
+        result = await self._skills_middleware.abefore_agent(state, runtime, config)
+        return result  # type: ignore[no-any-return]
 
-    def before_agent(self, state: AgentState, runtime, config) -> Optional[AgentState]:
+    def before_agent(self, state: AgentState, runtime, config) -> Optional[AgentState]:  # type: ignore[override]
         """Sync version - delegates to async."""
         import asyncio
 
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # If loop is running, we can't use run_until_complete
-            logger.warning(
-                "Event loop is running, skipping skill loading in before_agent"
-            )
+            logger.warning("Event loop is running, skipping skill loading in before_agent")
             return None
         except RuntimeError:
             # No running loop, safe to use asyncio.run()
@@ -158,8 +153,10 @@ class DatabaseSkillAdapter(AgentMiddleware):
     ) -> ModelResponse:
         """Delegate to SkillsMiddleware if available."""
         if self._skills_middleware is None:
-            return handler(request)
-        return self._skills_middleware.wrap_model_call(request, handler)
+            result = handler(request)
+            return result  # type: ignore[no-any-return]
+        result = self._skills_middleware.wrap_model_call(request, handler)
+        return result  # type: ignore[no-any-return]
 
     async def awrap_model_call(
         self,
@@ -168,5 +165,7 @@ class DatabaseSkillAdapter(AgentMiddleware):
     ) -> ModelResponse:
         """Async version - delegate to SkillsMiddleware if available."""
         if self._skills_middleware is None:
-            return await handler(request)
-        return await self._skills_middleware.awrap_model_call(request, handler)
+            result = await handler(request)
+            return result  # type: ignore[no-any-return]
+        result = await self._skills_middleware.awrap_model_call(request, handler)
+        return result  # type: ignore[no-any-return]

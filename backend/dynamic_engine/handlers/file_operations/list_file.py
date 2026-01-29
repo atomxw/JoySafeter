@@ -1,10 +1,11 @@
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.file_manager import file_manager
 
 logger = logging.getLogger(__name__)
+
 
 class ListFileHandler(AbstractHandler):
     """
@@ -18,7 +19,7 @@ class ListFileHandler(AbstractHandler):
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
+        """Handler related commands"""
         return []
 
     def handle(self, data: Dict) -> Any:

@@ -1,16 +1,18 @@
 """
 Skill Repository
 """
+
 from __future__ import annotations
 
-from typing import List, Optional
 import uuid
+from typing import List, Optional
 
-from sqlalchemy import select, and_, or_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.skill import Skill, SkillFile
+
 from .base import BaseRepository
 
 
@@ -35,7 +37,7 @@ class SkillRepository(BaseRepository[Skill]):
                     or_(
                         Skill.owner_id == user_id,
                         Skill.is_public.is_(True),
-                        Skill.owner_id.is_(None)  # 系统级公共 Skill
+                        Skill.owner_id.is_(None),  # 系统级公共 Skill
                     )
                 )
             else:
@@ -45,7 +47,7 @@ class SkillRepository(BaseRepository[Skill]):
             conditions.append(
                 or_(
                     Skill.is_public.is_(True),
-                    Skill.owner_id.is_(None)  # 系统级公共 Skill
+                    Skill.owner_id.is_(None),  # 系统级公共 Skill
                 )
             )
         else:
@@ -56,7 +58,7 @@ class SkillRepository(BaseRepository[Skill]):
             # 使用 JSONB 数组查询
             for tag in tags:
                 conditions.append(Skill.tags.contains([tag]))
-        
+
         if conditions:
             query = query.where(and_(*conditions))
 
@@ -72,23 +74,12 @@ class SkillRepository(BaseRepository[Skill]):
 
     async def count_by_user(self, user_id: str) -> int:
         """统计用户拥有的 Skill 数量"""
-        result = await self.db.execute(
-            select(Skill).where(Skill.owner_id == user_id)
-        )
+        result = await self.db.execute(select(Skill).where(Skill.owner_id == user_id))
         return len(list(result.scalars().all()))
 
-    async def get_by_name_and_owner(
-        self,
-        name: str,
-        owner_id: Optional[str]
-    ) -> Optional[Skill]:
+    async def get_by_name_and_owner(self, name: str, owner_id: Optional[str]) -> Optional[Skill]:
         """根据名称和拥有者获取 Skill"""
-        query = select(Skill).where(
-            and_(
-                Skill.name == name,
-                Skill.owner_id == owner_id
-            )
-        )
+        query = select(Skill).where(and_(Skill.name == name, Skill.owner_id == owner_id))
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
@@ -99,15 +90,13 @@ class SkillFileRepository(BaseRepository[SkillFile]):
 
     async def list_by_skill(self, skill_id: uuid.UUID) -> List[SkillFile]:
         """获取 Skill 的所有文件"""
-        result = await self.db.execute(
-            select(SkillFile).where(SkillFile.skill_id == skill_id)
-        )
+        result = await self.db.execute(select(SkillFile).where(SkillFile.skill_id == skill_id))
         return list(result.scalars().all())
 
     async def delete_by_skill(self, skill_id: uuid.UUID) -> int:
         """删除 Skill 的所有文件"""
         from sqlalchemy import delete
+
         stmt = delete(SkillFile).where(SkillFile.skill_id == skill_id)
         result = await self.db.execute(stmt)
         return result.rowcount if result.rowcount is not None else 0  # type: ignore
-

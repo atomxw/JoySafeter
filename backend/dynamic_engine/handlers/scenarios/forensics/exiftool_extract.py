@@ -1,5 +1,5 @@
-from typing import Any, Dict
 import logging
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
@@ -9,14 +9,14 @@ logger = logging.getLogger(__name__)
 
 class ExiftoolHandler(AbstractHandler):
     """Handler for exiftool functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['exiftool']
-    
+        """Handler related commands"""
+        return ["exiftool"]
+
     def handle(self, data: Dict) -> Any:
         """Execute exiftool with enhanced logging"""
         try:
@@ -26,12 +26,8 @@ class ExiftoolHandler(AbstractHandler):
             additional_args = data.get("additional_args", "")
             if not file_path:
                 logger.warning("📷 ExifTool called without file_path parameter")
-                return {
-    
-                    "error": "File path parameter is required"
-                
-                }
-            command = f"exiftool"
+                return {"error": "File path parameter is required"}
+            command = "exiftool"
             if output_format:
                 command += f" -{output_format}"
             if tags:
@@ -41,12 +37,8 @@ class ExiftoolHandler(AbstractHandler):
             command += f" {file_path}"
             logger.info(f"📷 Starting ExifTool analysis: {file_path}")
             result = execute_command(command)
-            logger.info(f"📊 ExifTool analysis completed")
+            logger.info("📊 ExifTool analysis completed")
             return result
         except Exception as e:
             logger.error(f"💥 Error in exiftool endpoint: {str(e)}")
-            return {
-    
-                "error": f"Server error: {str(e)}"
-            
-            }
+            return {"error": f"Server error: {str(e)}"}

@@ -5,12 +5,13 @@ This module provides a factory pattern for creating different types of backends
 improves maintainability and testability.
 """
 
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
 import os
 import shutil
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional
 
 from loguru import logger
+
 from app.utils.path_utils import sanitize_path_component
 
 if TYPE_CHECKING:
@@ -39,12 +40,12 @@ class BackendFactory:
     @staticmethod
     def _sanitize_path_component(value: Optional[str], default: str = "default", max_length: int = 100) -> str:
         """清理路径组件，防止路径遍历攻击。
-        
+
         Args:
             value: 原始值
             default: 默认值（如果 value 为 None 或无效）
             max_length: 最大长度限制
-            
+
         Returns:
             清理后的安全路径组件
         """
@@ -78,7 +79,7 @@ class BackendFactory:
         data = node.data or {}
         config = data.get("config", {})
         backend_type = config.get("backend_type", BACKEND_TYPE_FILESYSTEM)
-        node_label = data.get('label', 'unknown')
+        node_label = data.get("label", "unknown")
 
         if backend_type == BACKEND_TYPE_DOCKER:
             return BackendFactory._create_docker_backend(config, node_label)
@@ -109,8 +110,8 @@ class BackendFactory:
         """
         try:
             from app.core.agent.backends.pydantic_adapter import (
-                PydanticSandboxAdapter,
                 PYDANTIC_BACKEND_AVAILABLE,
+                PydanticSandboxAdapter,
             )
         except ImportError as e:
             logger.warning(
@@ -153,12 +154,8 @@ class BackendFactory:
             )
             return backend
         except Exception as e:
-            logger.error(
-                f"{LOG_PREFIX} Failed to create PydanticSandboxAdapter for node '{node_label}': {e}"
-            )
-            raise RuntimeError(
-                f"{LOG_PREFIX} Failed to create Docker backend for node '{node_label}': {e}"
-            ) from e
+            logger.error(f"{LOG_PREFIX} Failed to create PydanticSandboxAdapter for node '{node_label}': {e}")
+            raise RuntimeError(f"{LOG_PREFIX} Failed to create Docker backend for node '{node_label}': {e}") from e
 
     @staticmethod
     def _create_filesystem_backend(
@@ -193,22 +190,21 @@ class BackendFactory:
             ) from e
 
         # 获取基础路径
-        workspace_root = os.getenv('DEEPAGENTS_WORKSPACE_ROOT', '/tmp/deepagents_workspaces')
-        
+        workspace_root = os.getenv("DEEPAGENTS_WORKSPACE_ROOT", "/tmp/deepagents_workspaces")
+
         # 安全清理所有路径组件
         user_dir = sanitize_path_component(user_id, default="default")
         subdir = sanitize_path_component(workspace_subdir, default="default")
-        
-    
+
         # 构建完整路径: {workspace_root}/{user_id}/{workspace_subdir}/
-        workspace_dir = Path(workspace_root) / user_dir / subdir 
+        workspace_dir = Path(workspace_root) / user_dir / subdir
 
         try:
             # 先删除目录（如果存在），然后重新创建
             if workspace_dir.exists():
                 shutil.rmtree(workspace_dir)
                 logger.debug(f"{LOG_PREFIX} Removed existing workspace directory: {workspace_dir}")
-            
+
             workspace_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             raise RuntimeError(
@@ -226,9 +222,7 @@ class BackendFactory:
             )
             return backend
         except Exception as e:
-            raise RuntimeError(
-                f"{LOG_PREFIX} Failed to create FilesystemBackend for node '{node_label}': {e}"
-            ) from e
+            raise RuntimeError(f"{LOG_PREFIX} Failed to create FilesystemBackend for node '{node_label}': {e}") from e
 
     @staticmethod
     def create_backend_with_fallback(
@@ -252,7 +246,7 @@ class BackendFactory:
         data = node.data or {}
         config = data.get("config", {})
         backend_type = config.get("backend_type", BACKEND_TYPE_FILESYSTEM)
-        node_label = data.get('label', 'unknown')
+        node_label = data.get("label", "unknown")
 
         # If already filesystem, create directly
         if backend_type == BACKEND_TYPE_FILESYSTEM:

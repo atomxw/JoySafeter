@@ -5,7 +5,7 @@
 import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Tuple
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
@@ -103,4 +103,3 @@ class Permission(BaseModel):
         Index("permissions_user_entity_idx", "user_id", "entity_type", "entity_id"),
         UniqueConstraint("user_id", "entity_type", "entity_id", name="permissions_unique_constraint"),
     )
-

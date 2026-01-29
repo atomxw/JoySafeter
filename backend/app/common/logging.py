@@ -22,7 +22,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         """处理请求并记录日志"""
         start_time = time.time()
         method = request.method
-        url = str(request.url)
+        str(request.url)
         path = request.url.path
         client_host = request.client.host if request.client else "unknown"
 
@@ -52,9 +52,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         except Exception as e:
             process_time = time.time() - start_time
-            log.opt(exception=True).error(
-                f"request.failed duration={process_time:.3f}s error={type(e).__name__}"
-            )
+            log.opt(exception=True).error(f"request.failed duration={process_time:.3f}s error={type(e).__name__}")
             raise
 
 

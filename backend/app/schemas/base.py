@@ -1,7 +1,9 @@
-from typing import Generic, TypeVar, Optional
+from typing import Generic, Optional, TypeVar
+
 from pydantic import BaseModel as PydanticBaseModel
 
 T = TypeVar("T")
+
 
 class BaseResponse(PydanticBaseModel, Generic[T]):
     """所有API响应的基类"""

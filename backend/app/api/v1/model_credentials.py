@@ -1,24 +1,27 @@
 """
 模型凭据管理API
 """
+
 import uuid
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.dependencies import get_current_user
-from app.models.auth import AuthUser as User
-from app.core.database import get_db
-from app.services.model_credential_service import ModelCredentialService
 from app.common.response import success_response
+from app.core.database import get_db
+from app.models.auth import AuthUser as User
+from app.services.model_credential_service import ModelCredentialService
 
 router = APIRouter(prefix="/v1/model-credentials", tags=["ModelCredentials"])
 
 
 class CredentialCreate(BaseModel):
     """创建凭据请求"""
-    provider_name: str = Field(..., description="供应商名称", example="openaiapicompatible")
+
+    provider_name: str = Field(description="供应商名称", examples=["openaiapicompatible"])
     credentials: Dict[str, Any] = Field(..., description="凭据字典（明文）")
     workspace_id: Optional[uuid.UUID] = Field(default=None, alias="workspaceId", description="工作空间ID（可选）")
     should_validate: bool = Field(default=True, alias="validate", description="是否验证凭据")
@@ -26,6 +29,7 @@ class CredentialCreate(BaseModel):
 
 class CredentialValidateResponse(BaseModel):
     """凭据验证响应"""
+
     is_valid: bool
     error: Optional[str] = None
     last_validated_at: Optional[str] = None
@@ -39,10 +43,10 @@ async def create_or_update_credential(
 ):
     """
     创建或更新模型凭据
-    
+
     Args:
         payload: 凭据创建请求
-        
+
     Returns:
         创建的凭据信息
     """
@@ -66,10 +70,10 @@ async def list_credentials(
 ):
     """
     获取用户的所有凭据列表
-    
+
     Args:
         workspace_id: 工作空间ID（可选）
-        
+
     Returns:
         凭据列表
     """
@@ -90,10 +94,10 @@ async def get_credential(
 ):
     """
     获取凭据详情
-    
+
     Args:
         credential_id: 凭据ID
-        
+
     Returns:
         凭据详情（不包含解密后的凭据）
     """
@@ -110,10 +114,10 @@ async def validate_credential(
 ):
     """
     验证凭据
-    
+
     Args:
         credential_id: 凭据ID
-        
+
     Returns:
         验证结果
     """
@@ -130,11 +134,10 @@ async def delete_credential(
 ):
     """
     删除凭据
-    
+
     Args:
         credential_id: 凭据ID
     """
     service = ModelCredentialService(db)
     await service.delete_credential(credential_id)
     return success_response(message="删除凭据成功")
-

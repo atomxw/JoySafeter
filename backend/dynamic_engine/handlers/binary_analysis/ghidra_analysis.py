@@ -1,5 +1,6 @@
-from typing import Any, Dict
 import logging
+import os
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
@@ -9,14 +10,14 @@ logger = logging.getLogger(__name__)
 
 class GhidraHandler(AbstractHandler):
     """Handler for ghidra functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['ghidra']
-    
+        """Handler related commands"""
+        return ["ghidra"]
+
     def handle(self, data: Dict) -> Any:
         """Execute ghidra with enhanced logging"""
         try:

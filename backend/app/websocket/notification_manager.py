@@ -6,7 +6,6 @@ from enum import Enum
 from typing import Any, Dict, List, Set
 
 from fastapi import WebSocket
-from loguru import logger
 
 
 class NotificationType(str, Enum):
@@ -39,10 +38,13 @@ class NotificationManager:
             "connected_at": datetime.utcnow().isoformat(),
         }
 
-        await self.send_to_connection(websocket, {
-            "type": NotificationType.CONNECTED.value,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        await self.send_to_connection(
+            websocket,
+            {
+                "type": NotificationType.CONNECTED.value,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
 
     def disconnect(self, websocket: WebSocket) -> None:
         metadata = self.connection_metadata.get(websocket)
@@ -114,4 +116,3 @@ class NotificationManager:
 
 
 notification_manager = NotificationManager()
-

@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
@@ -21,8 +21,8 @@ class NcConnectHandler(AbstractHandler):
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['nc']
+        """Handler related commands"""
+        return ["nc"]
 
     def handle(self, data: Dict) -> Any:
         """Connect to remote host using netcat"""
@@ -43,17 +43,17 @@ class NcConnectHandler(AbstractHandler):
 
             # Build nc command
             command = "nc"
-            
+
             # Add verbose flag
             command += " -v"
-            
+
             # Add timeout
             command += f" -w {timeout}"
-            
+
             # Add UDP flag if needed
             if udp:
                 command += " -u"
-            
+
             # Add host and port
             command += f" {host} {port}"
 

@@ -13,6 +13,7 @@ LOG_PREFIX = "[AgentConfig]"
 @dataclass
 class AgentConfig:
     """Unified agent configuration - works for both Manager and SubAgent."""
+
     name: str
     label: str
     node_type: str
@@ -33,7 +34,7 @@ class AgentConfig:
         default_description: Optional[str] = None,
     ) -> "AgentConfig":
         """Parse and resolve all node properties into unified config.
-        
+
         Args:
             node: GraphNode to parse
             builder: DeepAgentsGraphBuilder instance
@@ -68,9 +69,7 @@ class AgentConfig:
             await builder.preload_skills_to_backend(node, backend)
 
         # Middleware resolution
-        middleware = await builder.resolve_middleware_for_node_with_backend(
-            node, backend, user_id=builder.user_id
-        )
+        middleware = await builder.resolve_middleware_for_node_with_backend(node, backend, user_id=builder.user_id)
 
         # Skills paths - only set if both skills are configured AND backend is available
         # This ensures skills parameter is only passed to create_deep_agent when actually usable
@@ -124,10 +123,11 @@ class AgentConfig:
 @dataclass
 class CodeAgentConfig(AgentConfig):
     """Extended config for CodeAgent nodes with specialized properties."""
+
     agent_mode: str = "autonomous"
     executor_type: str = "local"
     enable_data_analysis: bool = True
-    additional_imports: list[str] = None
+    additional_imports: Optional[list[str]] = None
     docker_image: str = "python:3.11-slim"
     max_steps: int = 20
     enable_planning: bool = False
@@ -142,12 +142,12 @@ class CodeAgentConfig(AgentConfig):
         node: GraphNode,
         builder: Any,
         node_id_to_name: dict,
+        default_description: Optional[str] = None,  # type: ignore[override]
     ) -> "CodeAgentConfig":
         """Parse CodeAgent node with all specialized properties."""
         # Get base config
         base_config = await AgentConfig.from_node(
-            node, builder, node_id_to_name,
-            default_description=f"Python code execution agent"
+            node, builder, node_id_to_name, default_description="Python code execution agent"
         )
 
         data = node.data or {}

@@ -1,5 +1,5 @@
-from typing import Any, Dict
 import logging
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
@@ -9,14 +9,14 @@ logger = logging.getLogger(__name__)
 
 class MsfvenomHandler(AbstractHandler):
     """Handler for msfvenom functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['msfvenom']
-    
+        """Handler related commands"""
+        return ["msfvenom"]
+
     def handle(self, data: Dict) -> Any:
         """Execute msfvenom with enhanced logging"""
         try:
@@ -28,11 +28,7 @@ class MsfvenomHandler(AbstractHandler):
             additional_args = data.get("additional_args", "")
             if not payload:
                 logger.warning("🚀 MSFVenom called without payload parameter")
-                return {
-    
-                    "error": "Payload parameter is required"
-                
-                }
+                return {"error": "Payload parameter is required"}
             command = f"msfvenom -p {payload}"
             if format_type:
                 command += f" -f {format_type}"
@@ -46,12 +42,8 @@ class MsfvenomHandler(AbstractHandler):
                 command += f" {additional_args}"
             logger.info(f"🚀 Starting MSFVenom payload generation: {payload}")
             result = execute_command(command)
-            logger.info(f"📊 MSFVenom payload generated")
+            logger.info("📊 MSFVenom payload generated")
             return result
         except Exception as e:
             logger.error(f"💥 Error in msfvenom endpoint: {str(e)}")
-            return {
-    
-                "error": f"Server error: {str(e)}"
-            
-            }
+            return {"error": f"Server error: {str(e)}"}

@@ -1,10 +1,11 @@
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
 
 logger = logging.getLogger(__name__)
+
 
 class NmapHandler(AbstractHandler):
     """
@@ -18,8 +19,8 @@ class NmapHandler(AbstractHandler):
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['nmap']
+        """Handler related commands"""
+        return ["nmap"]
 
     def handle(self, data: Dict) -> Any:
         """Execute nmap scan with enhanced logging, caching, and intelligent error handling"""
@@ -31,9 +32,7 @@ class NmapHandler(AbstractHandler):
 
             if not target:
                 logger.warning("🎯 Nmap called without target parameter")
-                return {
-                    "error": "Target parameter is required"
-                }
+                return {"error": "Target parameter is required"}
 
             command = f"nmap {scan_type}"
 
@@ -52,6 +51,4 @@ class NmapHandler(AbstractHandler):
             return result
         except Exception as e:
             logger.error(f"💥 Error in nmap endpoint: {str(e)}")
-            return {
-                "error": f"Server error: {str(e)}"
-            }
+            return {"error": f"Server error: {str(e)}"}

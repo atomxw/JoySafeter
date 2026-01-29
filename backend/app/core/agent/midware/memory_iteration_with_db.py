@@ -10,23 +10,23 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, List, Optional
-
-from loguru import logger
-from typing_extensions import NotRequired, TypedDict
+from typing import TYPE_CHECKING, Any, List, Literal, Optional
 
 from langchain.agents.middleware.types import AgentMiddleware, AgentState, ModelRequest, ModelResponse
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
+from loguru import logger
+from typing_extensions import NotRequired
 
 from app.core.agent.memory.manager import MemoryManager
 from app.schemas.memory import UserMemory
 
 if TYPE_CHECKING:
-    from langgraph.runtime import Runtime
+    pass
 
 
 class AgenticMemoryState(AgentState):
     """Agentic Memory 中间件的扩展状态"""
+
     user_id: NotRequired[str | None]
     agent_memory_context: NotRequired[str | None]
 
@@ -70,7 +70,7 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
 
         if self.memory_manager is None:
             raise ValueError("AgentMemoryManagerMiddleware requires a MemoryManager instance")
-        
+
         logger.info(
             f"AgentMemoryIterationMiddleware initialized: "
             f"retrieval_method={retrieval_method}, retrieval_limit={retrieval_limit}, "
@@ -83,7 +83,7 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
     # ---------------------------
     def _get_user_id(self) -> Optional[str]:
         """获取当前用户的 user_id
-        
+
         Returns:
             user_id 字符串，如果不存在则返回 None
         """
@@ -116,11 +116,11 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
                                 extracted = " ".join(text_parts) if text_parts else str(content)
                             else:
                                 extracted = str(content)
-                            
+
                             if extracted and extracted.strip():
                                 logger.debug(f"Extracted user input from HumanMessage: {extracted[:100]}...")
                                 return extracted
-                    
+
                     # 兼容性：检查消息的 type 属性（LangChain 消息类型）
                     elif hasattr(msg, "type"):
                         if msg.type == "human":
@@ -128,9 +128,11 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
                             if content:
                                 extracted = content if isinstance(content, str) else str(content)
                                 if extracted and extracted.strip():
-                                    logger.debug(f"Extracted user input from message type 'human': {extracted[:100]}...")
+                                    logger.debug(
+                                        f"Extracted user input from message type 'human': {extracted[:100]}..."
+                                    )
                                     return extracted
-                    
+
                     # 兼容性：检查字典格式的消息
                     elif isinstance(msg, dict):
                         msg_type = msg.get("type") or msg.get("role")
@@ -156,7 +158,7 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
                 if content.strip():
                     logger.debug(f"Extracted assistant response from response.content: {content[:100]}...")
                     return content
-        
+
         # 从消息列表中取最后一个 AIMessage 消息
         if hasattr(response, "messages") and response.messages:
             try:
@@ -180,11 +182,11 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
                                 extracted = " ".join(text_parts) if text_parts else str(content)
                             else:
                                 extracted = str(content)
-                            
+
                             if extracted and extracted.strip():
                                 logger.debug(f"Extracted assistant response from AIMessage: {extracted[:100]}...")
                                 return extracted
-                    
+
                     # 兼容性：检查消息的 type 属性（LangChain 消息类型）
                     elif hasattr(msg, "type"):
                         if msg.type == "ai":
@@ -192,9 +194,11 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
                             if content:
                                 extracted = content if isinstance(content, str) else str(content)
                                 if extracted and extracted.strip():
-                                    logger.debug(f"Extracted assistant response from message type 'ai': {extracted[:100]}...")
+                                    logger.debug(
+                                        f"Extracted assistant response from message type 'ai': {extracted[:100]}..."
+                                    )
                                     return extracted
-                    
+
                     # 兼容性：检查字典格式的消息
                     elif isinstance(msg, dict):
                         msg_type = msg.get("type") or msg.get("role")
@@ -203,7 +207,9 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
                             if content:
                                 extracted = content if isinstance(content, str) else str(content)
                                 if extracted and extracted.strip():
-                                    logger.debug(f"Extracted assistant response from dict message: {extracted[:100]}...")
+                                    logger.debug(
+                                        f"Extracted assistant response from dict message: {extracted[:100]}..."
+                                    )
                                     return extracted
             except Exception as e:
                 logger.warning(f"Failed to extract assistant response from messages: {e}", exc_info=True)
@@ -245,17 +251,17 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
             )
 
         try:
+            retrieval_method_literal: Literal["last_n", "first_n", "agentic"] | None = None
+            if self.retrieval_method in ("last_n", "first_n", "agentic"):
+                retrieval_method_literal = self.retrieval_method  # type: ignore[assignment]
             memories = await self.memory_manager.asearch_user_memories(
                 query=query,
                 limit=self.retrieval_limit,
-                retrieval_method=self.retrieval_method,
+                retrieval_method=retrieval_method_literal,
                 user_id=user_id,
             )
             memory_count = len(memories) if memories else 0
-            logger.info(
-                f"Memory retrieval completed for user_id={user_id}: "
-                f"found {memory_count} memories"
-            )
+            logger.info(f"Memory retrieval completed for user_id={user_id}: found {memory_count} memories")
         except Exception as e:
             logger.warning(f"Memory retrieval failed for user_id={user_id}: {e}")
             memories = []
@@ -272,9 +278,9 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
     # ---------------------------
     def before_agent(
         self,
-        state: AgenticMemoryState,
+        state: AgentState[Any],  # type: ignore[override]
         runtime,  # type: ignore[no-untyped-def]
-    ) -> AgenticMemoryState:
+    ) -> dict[str, Any]:  # type: ignore[override]
         """可在此处进行必要初始化"""
         user_id = self._get_user_id()
         if user_id:
@@ -286,14 +292,14 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
                 logger.warning(f"MemoryManager initialize failed for user_id={user_id}: {e}")
         else:
             logger.warning("Skipping MemoryManager initialization: no user_id available")
-        
-        return {}
+
+        return {"messages": []}
 
     async def abefore_agent(
         self,
-        state: AgenticMemoryState,
+        state: AgentState[Any],  # type: ignore[override]
         runtime,  # type: ignore[no-untyped-def]
-    ) -> AgenticMemoryState:
+    ) -> dict[str, Any]:  # type: ignore[override]
         return self.before_agent(state, runtime)
 
     def wrap_model_call(
@@ -303,7 +309,7 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
     ) -> ModelResponse:
         """在模型调用前注入记忆；在调用后按需写入记忆（同步版本，内部使用 asyncio.run）"""
         user_id = self._get_user_id()
-        
+
         if not user_id:
             logger.warning("Skipping memory operations: no user_id available")
             return handler(request)
@@ -316,15 +322,15 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
         if memory_context:
             # 记录到状态中，便于下游使用或调试
             try:
-                request.state["agent_memory_context"] = memory_context
+                request.state["agent_memory_context"] = memory_context  # type: ignore[typeddict-unknown-key]
             except Exception:
                 pass
 
             logger.info(f"Injecting memory context into system prompt for user_id={user_id}")
             if request.system_prompt:
-                request.system_prompt = f"{memory_context}\n\n{request.system_prompt}"
+                request.system_prompt = f"{memory_context}\n\n{request.system_prompt}"  # type: ignore[misc, assignment]
             else:
-                request.system_prompt = memory_context
+                request.system_prompt = memory_context  # type: ignore[misc, assignment]
         else:
             logger.debug(f"No memory context to inject for user_id={user_id}")
 
@@ -369,7 +375,7 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
     ) -> ModelResponse:
         """异步版本：在模型调用前注入记忆；在调用后按需写入记忆"""
         user_id = self._get_user_id()
-        
+
         if not user_id:
             logger.warning("Skipping memory operations: no user_id available")
             return await handler(request)
@@ -378,15 +384,15 @@ class AgentMemoryIterationMiddleware(AgentMiddleware):
         memory_context = await self._build_memory_context(request, user_id)
         if memory_context:
             try:
-                request.state["agent_memory_context"] = memory_context
+                request.state["agent_memory_context"] = memory_context  # type: ignore[typeddict-unknown-key]
             except Exception:
                 pass
 
             logger.info(f"Injecting memory context into system prompt for user_id={user_id}")
             if request.system_prompt:
-                request.system_prompt = f"{memory_context}\n\n{request.system_prompt}"
+                request.system_prompt = f"{memory_context}\n\n{request.system_prompt}"  # type: ignore[misc, assignment]
             else:
-                request.system_prompt = memory_context
+                request.system_prompt = memory_context  # type: ignore[misc, assignment]
         else:
             logger.debug(f"No memory context to inject for user_id={user_id}")
 

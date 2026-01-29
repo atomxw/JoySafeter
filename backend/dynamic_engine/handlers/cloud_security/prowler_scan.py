@@ -1,22 +1,23 @@
+import logging
 from pathlib import Path
 from typing import Any, Dict
-import logging
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
 
 logger = logging.getLogger(__name__)
 
+
 class ProwlerHandler(AbstractHandler):
     """Handler for prowler functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['prowler']
-    
+        """Handler related commands"""
+        return ["prowler"]
+
     def handle(self, data: Dict) -> Any:
         """Execute prowler with enhanced logging"""
         try:
@@ -42,12 +43,8 @@ class ProwlerHandler(AbstractHandler):
             logger.info(f"☁️  Starting Prowler {provider} security assessment")
             result = execute_command(command)
             result["output_directory"] = output_dir
-            logger.info(f"📊 Prowler assessment completed")
+            logger.info("📊 Prowler assessment completed")
             return result
         except Exception as e:
             logger.error(f"💥 Error in prowler endpoint: {str(e)}")
-            return {
-    
-                "error": f"Server error: {str(e)}"
-            
-            }
+            return {"error": f"Server error: {str(e)}"}

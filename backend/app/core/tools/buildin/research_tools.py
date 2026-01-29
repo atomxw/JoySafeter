@@ -35,7 +35,7 @@ def fetch_webpage_content(url: str, timeout: float = 10.0) -> str:
     try:
         response = httpx.get(url, headers=headers, timeout=timeout)
         response.raise_for_status()
-        return markdownify(response.text)
+        return str(markdownify(response.text))
     except Exception as e:
         return f"Error fetching content from {url}: {str(e)}"
 
@@ -44,9 +44,7 @@ def fetch_webpage_content(url: str, timeout: float = 10.0) -> str:
 def tavily_search(
     query: str,
     max_results: Annotated[int, InjectedToolArg] = 1,
-    topic: Annotated[
-        Literal["general", "news", "finance"], InjectedToolArg
-    ] = "general",
+    topic: Annotated[Literal["general", "news", "finance"], InjectedToolArg] = "general",
 ) -> str:
     """Search the web for information on a given query.
 
@@ -62,7 +60,7 @@ def tavily_search(
     """
     if tavily_client is None:
         return "Error: Tavily client is not available. Please install tavily-python package."
-    
+
     # Use Tavily to discover URLs
     search_results = tavily_client.search(
         query,
@@ -125,4 +123,3 @@ def think_tool(reflection: str) -> str:
 
 
 __all__ = ["tavily_search", "think_tool"]
-

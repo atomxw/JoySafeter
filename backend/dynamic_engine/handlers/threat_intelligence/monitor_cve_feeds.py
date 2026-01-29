@@ -10,14 +10,14 @@ logger = logging.getLogger(__name__)
 
 class CveMonitorHandler(AbstractHandler):
     """Handler for cve_monitor functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
+        """Handler related commands"""
         return []
-    
+
     def handle(self, data: Dict) -> Any:
         """Execute cve_monitor with enhanced logging"""
         try:
@@ -47,15 +47,10 @@ class CveMonitorHandler(AbstractHandler):
                 "success": True,
                 "cve_monitoring": cve_results,
                 "exploitability_analysis": exploitability_analysis,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
             logger.info(f"📊 CVE monitoring completed | Found: {len(cve_results.get('cves', []))} CVEs")
             return result
         except Exception as e:
             logger.error(f"💥 Error in CVE monitoring: {str(e)}")
-            return {
-    
-                "success": False,
-                "error": f"Server error: {str(e)}"
-            
-            }
+            return {"success": False, "error": f"Server error: {str(e)}"}

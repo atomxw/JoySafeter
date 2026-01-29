@@ -5,26 +5,27 @@ Exports the main API router which aggregates all sub-routers.
 """
 
 from fastapi import APIRouter
-from app.dynamic_agent.web.routes.sessions import router as sessions_router
-from app.dynamic_agent.web.routes.tools import router as tools_router
-from app.dynamic_agent.web.routes.tasks import router as tasks_router
+
 from app.dynamic_agent.web.routes.history import router as history_router
 from app.dynamic_agent.web.routes.scan import router as scan_router
+from app.dynamic_agent.web.routes.sessions import router as sessions_router
+from app.dynamic_agent.web.routes.tasks import router as tasks_router
+from app.dynamic_agent.web.routes.tools import router as tools_router
 
 # Re-export models for compatibility
 from .models import (
-    SessionResponse,
+    AgentResponse,
+    ChatMessageResponse,
+    ErrorResponse,
+    ExecutionTreeResponse,
     SessionDetailsResponse,
     SessionListResponse,
+    SessionResponse,
     TaskBasicResponse,
-    TaskSummaryResponse,
     TaskListResponse,
-    ExecutionTreeResponse,
-    AgentResponse,
-    ToolInvocationResponse,
-    ChatMessageResponse,
+    TaskSummaryResponse,
     ToolInfo,
-    ErrorResponse,
+    ToolInvocationResponse,
 )
 
 # Main API Router
@@ -34,8 +35,8 @@ router = APIRouter(prefix="/api")
 # 1. Web Visualization Routes (Mocked for now, migrating to real)
 # Prefix: /api/web
 web_router = APIRouter(prefix="/web")
-web_router.include_router(sessions_router) # /api/web/users/{uid}/sessions
-web_router.include_router(tools_router)    # /api/web/tools
+web_router.include_router(sessions_router)  # /api/web/users/{uid}/sessions
+web_router.include_router(tools_router)  # /api/web/tools
 web_router.include_router(history_router)
 
 router.include_router(web_router)

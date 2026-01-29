@@ -6,30 +6,32 @@ MCP Server API - MCP 服务器管理
 - 响应体: camelCase (前端兼容)
 - 返回格式: {"success": True, "data": ...}
 """
-from typing import Any, Dict, List, Optional
+
+from typing import Any, Dict, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Path
-from pydantic import BaseModel, Field, model_validator
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.dependencies import get_current_user
 from app.common.exceptions import BadRequestException, NotFoundException
 from app.core.database import get_db
 from app.models.auth import AuthUser as User
-from app.services.tool_service import ToolService
 from app.services.mcp_client_service import McpConnectionConfig, get_mcp_client
-
+from app.services.tool_service import ToolService
 
 router = APIRouter(prefix="/v1/mcp", tags=["MCP Servers"])
 
 
 # ==================== Request Schemas ====================
 
+
 class McpServerCreateRequest(BaseModel):
     """创建 MCP 服务器"""
+
     model_config = {"populate_by_name": True}
-    
+
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     transport: str = "streamable-http"
@@ -42,6 +44,7 @@ class McpServerCreateRequest(BaseModel):
 
 class McpServerUpdateRequest(BaseModel):
     """更新 MCP 服务器"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     transport: Optional[str] = None
@@ -58,6 +61,7 @@ class ToggleRequest(BaseModel):
 
 class McpTestRequest(BaseModel):
     """连接测试请求"""
+
     transport: str = "streamable-http"
     url: Optional[str] = None
     headers: Optional[Dict[str, str]] = None
@@ -66,15 +70,17 @@ class McpTestRequest(BaseModel):
 
 class McpToolExecuteRequest(BaseModel):
     """工具执行请求
-    
+
     使用 serverName 查找服务器（每个用户唯一）。
     """
+
     serverName: str = Field(..., description="Server name (unique per user)")
     toolName: str
     arguments: Dict[str, Any] = Field(default_factory=dict)
 
 
 # ==================== Serialization (camelCase for frontend) ====================
+
 
 def _serialize_server(server) -> Dict[str, Any]:
     """序列化服务器为 camelCase 响应"""
@@ -117,6 +123,7 @@ def _serialize_tool(tool_info) -> Dict[str, Any]:
 
 # ==================== Server CRUD ====================
 
+
 @router.get("/servers")
 async def list_mcp_servers(
     enabled_only: bool = Query(False, alias="enabledOnly"),
@@ -129,7 +136,7 @@ async def list_mcp_servers(
         user_id=current_user.id,
         enabled_only=enabled_only,
     )
-    
+
     return {"success": True, "data": {"servers": [_serialize_server(s) for s in servers]}}
 
 
@@ -141,10 +148,11 @@ async def create_mcp_server(
 ):
     """创建 MCP 服务器"""
     from loguru import logger
+
     from app.schemas.mcp import McpServerCreate
-    
+
     logger.info(f"[MCP] Creating server - user_id={current_user.id}, name={request.name}")
-    
+
     service = ToolService(db)
 
     server = await service.create_mcp_server(
@@ -160,7 +168,7 @@ async def create_mcp_server(
             enabled=request.enabled,
         ),
     )
-    
+
     logger.info(f"[MCP] Server created - id={server.id}, name={server.name}")
     return {"success": True, "data": {"serverId": str(server.id)}}
 
@@ -174,7 +182,7 @@ async def get_mcp_server(
     """获取 MCP 服务器详情"""
     service = ToolService(db)
     server = await service.get_mcp_server(server_id=server_id, user_id=current_user.id)
-    
+
     return {"success": True, "data": _serialize_server(server)}
 
 
@@ -187,7 +195,7 @@ async def update_mcp_server(
 ):
     """更新 MCP 服务器"""
     from app.schemas.mcp import McpServerUpdate
-    
+
     service = ToolService(db)
     server = await service.update_mcp_server(
         server_id=server_id,
@@ -203,7 +211,7 @@ async def update_mcp_server(
             enabled=request.enabled,
         ),
     )
-    
+
     return {"success": True, "data": _serialize_server(server)}
 
 
@@ -216,11 +224,12 @@ async def delete_mcp_server(
     """删除 MCP 服务器"""
     service = ToolService(db)
     await service.delete_mcp_server(server_id=server_id, user_id=current_user.id)
-    
+
     return {"success": True, "data": None}
 
 
 # ==================== Server Actions ====================
+
 
 @router.post("/servers/{server_id}/toggle")
 async def toggle_mcp_server(
@@ -236,7 +245,7 @@ async def toggle_mcp_server(
         user_id=current_user.id,
         enabled=request.enabled,
     )
-    
+
     return {"success": True, "data": _serialize_server(server)}
 
 
@@ -249,7 +258,7 @@ async def test_server_connection(
     """测试已存在服务器的连接"""
     service = ToolService(db)
     result = await service.test_connection(server_id=server_id, user_id=current_user.id)
-    
+
     return {
         "success": True,
         "data": {
@@ -271,7 +280,7 @@ async def refresh_server_tools(
     """刷新服务器工具列表"""
     service = ToolService(db)
     tools = await service.refresh_server_tools(server_id=server_id, user_id=current_user.id)
-    
+
     return {"success": True, "data": [_serialize_tool(t) for t in tools]}
 
 
@@ -284,11 +293,12 @@ async def list_server_tools(
     """获取服务器的工具列表"""
     service = ToolService(db)
     tools = await service.get_server_tools(server_id=server_id, user_id=current_user.id)
-    
+
     return {"success": True, "data": [_serialize_tool(t) for t in tools]}
 
 
 # ==================== Connection Test & Tools ====================
+
 
 @router.post("/test")
 async def test_connection(
@@ -303,10 +313,10 @@ async def test_connection(
         timeout_seconds=request.timeout // 1000,
         headers=request.headers or {},
     )
-    
+
     # For test connection before creation, pass None (will create temporary server)
     result = await mcp_client.test_connection(config, server=None)
-    
+
     return {
         "success": True,
         "data": {
@@ -325,23 +335,25 @@ async def discover_tools(
 ):
     """发现当前用户的所有 MCP 工具（用户级别）"""
     service = ToolService(db)
-    
+
     servers = await service.list_mcp_servers(
         user_id=current_user.id,
         enabled_only=True,
     )
-    
+
     all_tools = []
     for server in servers:
         tools = await service.get_server_tools(server_id=server.id, user_id=current_user.id)
         for tool in tools:
-            all_tools.append({
-                "serverName": server.name,
-                "name": tool.name,
-                "labelName": tool.label_name or tool.name,
-                "description": tool.description,
-            })
-    
+            all_tools.append(
+                {
+                    "serverName": server.name,
+                    "name": tool.name,
+                    "labelName": tool.label_name or tool.name,
+                    "description": tool.description,
+                }
+            )
+
     return {"success": True, "data": {"tools": all_tools}}
 
 
@@ -352,18 +364,19 @@ async def execute_tool(
     current_user: User = Depends(get_current_user),
 ):
     """执行 MCP 工具
-    
+
     使用 serverName 查找真实的 MCP server instance，并验证权限和状态。
     确保使用真实的 server instance 和 tool_name 执行工具。
     """
-    from app.core.tools.mcp_tool_utils import get_mcp_tool_with_instance
     from loguru import logger
-    
+
+    from app.core.tools.mcp_tool_utils import get_mcp_tool_with_instance
+
     logger.debug(
         f"[execute_tool] Executing MCP tool: serverName={request.serverName}, "
         f"toolName={request.toolName}, user_id={current_user.id}"
     )
-    
+
     # Get tool with instance validation (validates server exists, enabled, and user permissions)
     tool = await get_mcp_tool_with_instance(
         server_name=request.serverName,
@@ -371,28 +384,25 @@ async def execute_tool(
         user_id=current_user.id,
         db=db,
     )
-    
+
     if not tool:
         # get_mcp_tool_with_instance already logs detailed warnings
         raise NotFoundException(
-            f"MCP tool '{request.toolName}' not found on server '{request.serverName}' "
-            f"or server is not accessible"
+            f"MCP tool '{request.toolName}' not found on server '{request.serverName}' or server is not accessible"
         )
-    
+
     try:
         logger.debug(
             f"[execute_tool] Invoking tool '{request.toolName}' on server '{request.serverName}' "
             f"with arguments: {request.arguments}"
         )
         result = await tool.ainvoke(request.arguments)
-        logger.debug(
-            f"[execute_tool] Tool '{request.toolName}' executed successfully on server '{request.serverName}'"
-        )
+        logger.debug(f"[execute_tool] Tool '{request.toolName}' executed successfully on server '{request.serverName}'")
         return {"success": True, "data": result}
     except Exception as e:
         logger.error(
             f"[execute_tool] Tool execution failed: serverName={request.serverName}, "
             f"toolName={request.toolName}, error={str(e)}",
-            exc_info=True
+            exc_info=True,
         )
         raise BadRequestException(f"Tool execution failed: {str(e)}")

@@ -14,21 +14,19 @@ from uuid import UUID, uuid4
 
 from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.messages import BaseMessage
+from loguru import logger
 
 from app.dynamic_agent.infra.metadata_context import MetadataContext
 from app.dynamic_agent.observability.tracking_events import (
-    ToolStartEvent,
+    ChatModelEndEvent,
+    ChatModelStartEvent,
+    LLMEndEvent,
+    LLMStartEvent,
     ToolEndEvent,
     ToolErrorEvent,
-    LLMStartEvent,
-    LLMEndEvent,
-    ChatModelStartEvent,
-    ChatModelEndEvent,
+    ToolStartEvent,
     get_tracking_queue,
 )
-
-from loguru import logger
-
 
 # Global counter for task iteration counts (task_id -> count)
 _task_iteration_counts: Dict[UUID, int] = {}
@@ -44,9 +42,10 @@ def reset_task_iteration_count(task_id: UUID) -> None:
     if task_id in _task_iteration_counts:
         del _task_iteration_counts[task_id]
 
+
 def _get_current_task_id() -> Optional[UUID]:
     """Get current task_id from MetadataContext."""
-    task_id = MetadataContext.get_value('task_id')
+    task_id = MetadataContext.get_value("task_id")
     if task_id:
         if isinstance(task_id, UUID):
             logger.debug(f"[Tracking] Got task_id from context (UUID): {task_id}")
@@ -135,28 +134,34 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
             iteration_count = self._increment_task_iteration(task_id)
 
             tool_name = serialized.get("name", "unknown_tool")
-            logger.info(f"[Tracking] on_tool_start: {tool_name}, run_id={run_id}, task_id={task_id}, iteration={iteration_count}")
+            logger.info(
+                f"[Tracking] on_tool_start: {tool_name}, run_id={run_id}, task_id={task_id}, iteration={iteration_count}"
+            )
 
             # Pre-generate step_id
             pre_generated_step_id = uuid4()
 
             # Set step_id in MetadataContext for other components to use
-            MetadataContext.update({
-                "current_step_id": str(pre_generated_step_id),
-                "current_step_type": "tool",
-                "current_step_name": tool_name
-            })
+            MetadataContext.update(
+                {
+                    "current_step_id": str(pre_generated_step_id),
+                    "current_step_type": "tool",
+                    "current_step_name": tool_name,
+                }
+            )
 
             # Convert input to serializable format
             input_value = input_str
-            if hasattr(input_str, 'content'):
+            if hasattr(input_str, "content"):
                 input_value = input_str.content
             elif not isinstance(input_str, str):
                 input_value = str(input_str)
 
             # Parse input to dict if possible
             try:
-                input_data = json.loads(input_value) if isinstance(input_value, str) else {"raw_input": str(input_value)}
+                input_data = (
+                    json.loads(input_value) if isinstance(input_value, str) else {"raw_input": str(input_value)}
+                )
             except (json.JSONDecodeError, TypeError):
                 input_data = {"raw_input": input_value}
 
@@ -172,7 +177,9 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
             )
             self._send_event(event)
 
-            logger.debug(f"[Tracking] Queued tool_start for {tool_name} (step_key={step_key}, step_id={pre_generated_step_id}, iteration={iteration_count})")
+            logger.debug(
+                f"[Tracking] Queued tool_start for {tool_name} (step_key={step_key}, step_id={pre_generated_step_id}, iteration={iteration_count})"
+            )
 
         except Exception as e:
             logger.error(f"Error in on_tool_start: {e}", exc_info=True)
@@ -201,7 +208,7 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
 
             # Convert output to serializable format
             output_str = output
-            if hasattr(output, 'content'):
+            if hasattr(output, "content"):
                 output_str = output.content
             elif not isinstance(output, str):
                 output_str = str(output)
@@ -229,12 +236,16 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
 
     async def on_tool_error(
         self,
-        error: Exception,
+        error: BaseException,  # type: ignore[override]
+        *,
+        run_id: UUID | None = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
         **kwargs: Any,
     ) -> None:
         """Called when a tool call fails."""
-        run_id = str(kwargs.get("run_id", ""))
-        if self._should_skip_run(run_id):
+        run_id_str = str(run_id) if run_id else ""
+        if self._should_skip_run(run_id_str):
             return
 
         try:
@@ -250,10 +261,10 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
                 return
 
             # Create and send event
-            step_key = self._get_step_key(task_id, run_id)
+            step_key = self._get_step_key(task_id, run_id_str)
             event = ToolErrorEvent(
                 task_id=task_id,
-                run_id=run_id,
+                run_id=run_id_str,
                 step_key=step_key,
                 error_message=str(error),
             )
@@ -289,7 +300,9 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
             # Increment iteration count when ChatModel starts
             iteration_count = self._increment_task_iteration(task_id)
 
-            logger.info(f"[Tracking] on_chat_model_start: model={model_name}, run_id={run_id}, task_id={task_id}, iteration={iteration_count}")
+            logger.info(
+                f"[Tracking] on_chat_model_start: model={model_name}, run_id={run_id}, task_id={task_id}, iteration={iteration_count}"
+            )
 
             # Pre-generate step_id
             pre_generated_step_id = uuid4()
@@ -306,15 +319,17 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
             for msg_list in messages:
                 msg_list_data = []
                 for msg in msg_list:
-                    if hasattr(msg, 'model_dump'):
+                    if hasattr(msg, "model_dump"):
                         msg_list_data.append(msg.model_dump())
-                    elif hasattr(msg, 'dict'):
+                    elif hasattr(msg, "dict"):
                         msg_list_data.append(msg.dict())
                     else:
-                        msg_list_data.append({
-                            "type": msg.__class__.__name__,
-                            "content": str(msg.content) if hasattr(msg, 'content') else str(msg)
-                        })
+                        msg_list_data.append(
+                            {
+                                "type": msg.__class__.__name__,
+                                "content": str(msg.content) if hasattr(msg, "content") else str(msg),
+                            }
+                        )
                 messages_data.append(msg_list_data)
 
             # Create and send event with pre-generated step_id
@@ -329,7 +344,9 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
             )
             self._send_event(event)
 
-            logger.debug(f"[Tracking] Queued chat_model_start for {model_name} (step_key={step_key}, step_id={pre_generated_step_id}, iteration={iteration_count})")
+            logger.debug(
+                f"[Tracking] Queued chat_model_start for {model_name} (step_key={step_key}, step_id={pre_generated_step_id}, iteration={iteration_count})"
+            )
 
         except Exception as e:
             logger.error(f"Error in on_chat_model_start: {e}", exc_info=True)
@@ -358,14 +375,14 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
 
             # Extract response data from BaseMessage
             output_data = {}
-            if hasattr(message, 'dict'):
+            if hasattr(message, "dict"):
                 output_data = message.dict()
-            elif hasattr(message, 'model_dump'):
+            elif hasattr(message, "model_dump"):
                 output_data = message.model_dump()
             else:
                 output_data = {
                     "type": message.__class__.__name__,
-                    "content": str(message.content) if hasattr(message, 'content') else str(message)
+                    "content": str(message.content) if hasattr(message, "content") else str(message),
                 }
 
             # Create and send event
@@ -406,17 +423,21 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
             # Increment iteration count when LLM starts
             iteration_count = self._increment_task_iteration(task_id)
 
-            logger.info(f"[Tracking] on_llm_start: model={model_name}, run_id={run_id}, task_id={task_id}, iteration={iteration_count}")
+            logger.info(
+                f"[Tracking] on_llm_start: model={model_name}, run_id={run_id}, task_id={task_id}, iteration={iteration_count}"
+            )
 
             # Pre-generate step_id
             pre_generated_step_id = uuid4()
 
             # Set step_id in MetadataContext for other components to use
-            MetadataContext.update({
-                "current_step_id": str(pre_generated_step_id),
-                "current_step_type": "llm",
-                "current_step_name": f"LLM: {model_name}"
-            })
+            MetadataContext.update(
+                {
+                    "current_step_id": str(pre_generated_step_id),
+                    "current_step_type": "llm",
+                    "current_step_name": f"LLM: {model_name}",
+                }
+            )
 
             # Create and send event with pre-generated step_id
             step_key = self._get_step_key(task_id, run_id)
@@ -431,7 +452,9 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
             )
             self._send_event(event)
 
-            logger.debug(f"[Tracking] Queued llm_start for {model_name} (step_key={step_key}, step_id={pre_generated_step_id}, iteration={iteration_count})")
+            logger.debug(
+                f"[Tracking] Queued llm_start for {model_name} (step_key={step_key}, step_id={pre_generated_step_id}, iteration={iteration_count})"
+            )
 
         except Exception as e:
             logger.error(f"Error in on_llm_start: {e}", exc_info=True)
@@ -460,7 +483,7 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
 
             # Extract response data
             output_data = {}
-            if hasattr(response, 'generations'):
+            if hasattr(response, "generations"):
                 generations = response.generations
                 generations_data = []
                 tool_calls_list = []
@@ -468,20 +491,17 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
                 for gen_list in generations:
                     gen_data = []
                     for gen in gen_list:
-                        gen_dict = {
-                            "text": gen.text,
-                            "generation_info": gen.generation_info
-                        }
+                        gen_dict = {"text": gen.text, "generation_info": gen.generation_info}
 
-                        if hasattr(gen, 'message'):
+                        if hasattr(gen, "message"):
                             msg = gen.message
-                            if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                            if hasattr(msg, "tool_calls") and msg.tool_calls:
                                 for tc in msg.tool_calls:
                                     tool_call_dict = {
-                                        "id": getattr(tc, 'id', None),
-                                        "name": tc.get('name') if isinstance(tc, dict) else getattr(tc, 'name', None),
-                                        "args": tc.get('args') if isinstance(tc, dict) else getattr(tc, 'args', {}),
-                                        "type": getattr(tc, 'type', 'function')
+                                        "id": getattr(tc, "id", None),
+                                        "name": tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", None),
+                                        "args": tc.get("args") if isinstance(tc, dict) else getattr(tc, "args", {}),
+                                        "type": getattr(tc, "type", "function"),
                                     }
                                     tool_calls_list.append(tool_call_dict)
 
@@ -491,7 +511,7 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
                 output_data = {
                     "generations": generations_data,
                     "llm_output": response.llm_output,
-                    "generation_count": sum(len(gen_list) for gen_list in generations)
+                    "generation_count": sum(len(gen_list) for gen_list in generations),
                 }
 
                 if tool_calls_list:
@@ -517,7 +537,11 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
 
     async def on_llm_error(
         self,
-        error: Exception,
+        error: BaseException,  # type: ignore[override]
+        *,
+        run_id: UUID | None = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
         **kwargs: Any,
     ) -> None:
         """Called when LLM call fails."""
@@ -528,8 +552,6 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
             if not task_id:
                 logger.debug("No task_id in context, skipping llm_error tracking")
                 return
-
-            run_id = str(kwargs.get("run_id", ""))
 
             if not run_id:
                 logger.warning("[Tracking] No run_id in on_llm_error")
@@ -555,7 +577,7 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
                 logger.debug("No task_id in context, skipping chain_start tracking")
                 return
 
-            chain_name = 'unknown_chain'
+            chain_name = "unknown_chain"
             if serialized:
                 chain_name = serialized.get("name", "unknown_chain")
 
@@ -579,14 +601,20 @@ class TaskExecutionTrackingHandler(AsyncCallbackHandler):
 
     async def on_chain_error(
         self,
-        error: Exception,
+        error: BaseException,  # type: ignore[override]
+        *,
+        run_id: UUID | None = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
         **kwargs: Any,
     ) -> None:
         """Called when a chain execution fails."""
         try:
             if error is None:
                 # This happens when model returns no tool calls when expected
-                logger.warning("Chain error callback triggered but error object is None (likely model returned no tool calls when expected)")
+                logger.warning(
+                    "Chain error callback triggered but error object is None (likely model returned no tool calls when expected)"
+                )
             else:
                 # Log error without exc_info to avoid misleading "NoneType: None" output
                 # In async callback contexts, sys.exc_info() is often empty/unreliable

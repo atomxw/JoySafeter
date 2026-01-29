@@ -1,13 +1,16 @@
 """
 组织与成员 Repository
 """
-from typing import Optional, List
+
 import uuid
-from sqlalchemy import select, func
+from typing import List, Optional
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.organization import Organization, Member
+from app.models.organization import Member, Organization
+
 from .base import BaseRepository
 
 
@@ -22,9 +25,7 @@ class OrganizationRepository(BaseRepository[Organization]):
         query = (
             select(Organization)
             .where(Organization.id == org_id)
-            .options(
-                selectinload(Organization.members).selectinload(Member.user)
-            )
+            .options(selectinload(Organization.members).selectinload(Member.user))
         )
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
@@ -50,11 +51,13 @@ class MemberRepository(BaseRepository[Member]):
     def __init__(self, db: AsyncSession):
         super().__init__(Member, db)
 
-    async def get_by_user_and_org(self, user_id: uuid.UUID, org_id: uuid.UUID) -> Optional[Member]:
+    async def get_by_user_and_org(self, user_id: str | uuid.UUID, org_id: uuid.UUID) -> Optional[Member]:
         """根据用户和组织获取成员"""
+        # Convert user_id to string if it's UUID
+        user_id_str = str(user_id) if isinstance(user_id, uuid.UUID) else user_id
         query = (
             select(Member)
-            .where(Member.user_id == user_id, Member.organization_id == org_id)
+            .where(Member.user_id == user_id_str, Member.organization_id == org_id)
             .options(selectinload(Member.user))
         )
         result = await self.db.execute(query)
@@ -62,11 +65,7 @@ class MemberRepository(BaseRepository[Member]):
 
     async def list_by_org(self, org_id: uuid.UUID) -> List[Member]:
         """获取组织下所有成员，包含用户信息"""
-        query = (
-            select(Member)
-            .where(Member.organization_id == org_id)
-            .options(selectinload(Member.user))
-        )
+        query = select(Member).where(Member.organization_id == org_id).options(selectinload(Member.user))
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

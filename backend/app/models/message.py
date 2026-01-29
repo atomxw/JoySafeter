@@ -3,18 +3,20 @@
 
 用于 LangGraph 对话系统的消息存储
 """
+
 import json
 from typing import Any, Dict, List, Optional, Sequence, Union
-from loguru import logger
 
+from loguru import logger
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import ConfigDict
 from sqlalchemy import JSON, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import BaseModel as SQLAlchemyBaseModel, SoftDeleteMixin
+from app.models.base import BaseModel as SQLAlchemyBaseModel
+from app.models.base import SoftDeleteMixin
+from app.utils.media import Audio, File, Image, Video
 
-from pydantic import BaseModel as PydanticBaseModel, ConfigDict, Field
-
-from app.utils.media import Image, Audio, Video, File
 
 class MessageReferences(PydanticBaseModel):
     """References added to user message"""
@@ -129,7 +131,7 @@ class Message(SQLAlchemyBaseModel, SoftDeleteMixin):
     # This flag is enabled when a message is fetched from the agent's memory.
     from_history: bool = False
     # Metrics for the message.
-    #metrics: Metrics = Field(default_factory=Metrics)
+    # metrics: Metrics = Field(default_factory=Metrics)
     # The references added to the message for RAG
     references: Optional[MessageReferences] = None
 
@@ -154,7 +156,6 @@ class Message(SQLAlchemyBaseModel, SoftDeleteMixin):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Message":
-        
         # Handle image reconstruction properly
         if "images" in data and data["images"]:
             reconstructed_images = []
@@ -326,8 +327,8 @@ class Message(SQLAlchemyBaseModel, SoftDeleteMixin):
 
         if self.references:
             message_dict["references"] = self.references.model_dump()
-        if self.metrics:
-            message_dict["metrics"] = self.metrics.to_dict()
+        if hasattr(self, "metrics") and self.metrics:
+            message_dict["metrics"] = self.metrics.to_dict()  # type: ignore[attr-defined]
             if not message_dict["metrics"]:
                 message_dict.pop("metrics")
 
@@ -341,7 +342,7 @@ class Message(SQLAlchemyBaseModel, SoftDeleteMixin):
             "tool_name": self.tool_name,
             "tool_args": self.tool_args,
             "tool_call_error": self.tool_call_error,
-            "metrics": self.metrics,
+            "metrics": getattr(self, "metrics", None),  # type: ignore[attr-defined]
             "created_at": self.created_at,
         }
 

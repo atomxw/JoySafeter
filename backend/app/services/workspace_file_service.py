@@ -1,6 +1,7 @@
 """
 工作空间文件存储服务
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,6 +22,7 @@ from app.models.workspace import WorkspaceMemberRole
 from app.repositories.workspace import WorkspaceMemberRepository, WorkspaceRepository
 from app.repositories.workspace_file import WorkspaceStoredFileRepository
 from app.utils.path_utils import sanitize_filename
+
 from .base import BaseService
 
 
@@ -47,7 +49,7 @@ class WorkspaceFileService(BaseService):
 
     def _sanitize_filename(self, filename: str) -> str:
         """清理文件名，避免路径穿越
-        
+
         使用统一的 sanitize_filename 工具函数。
         """
         return sanitize_filename(filename or "unnamed")
@@ -89,11 +91,9 @@ class WorkspaceFileService(BaseService):
         member = await self.member_repo.get_member(workspace_id, user.id)
         if not member:
             raise ForbiddenException("No access to workspace")
-        return member.role
+        return member.role  # type: ignore
 
-    def _token_payload(
-        self, workspace_id: uuid.UUID, file_id: uuid.UUID, user_id: uuid.UUID
-    ) -> Dict:
+    def _token_payload(self, workspace_id: uuid.UUID, file_id: uuid.UUID, user_id: uuid.UUID) -> Dict:
         now = datetime.now(timezone.utc)
         return {
             "sub": str(user_id),
@@ -104,9 +104,7 @@ class WorkspaceFileService(BaseService):
             "exp": now + timedelta(minutes=self.DOWNLOAD_TOKEN_EXPIRE_MINUTES),
         }
 
-    def _validate_download_token(
-        self, token: str, workspace_id: uuid.UUID, file_id: uuid.UUID
-    ) -> Optional[str]:
+    def _validate_download_token(self, token: str, workspace_id: uuid.UUID, file_id: uuid.UUID) -> Optional[str]:
         try:
             payload = jwt.decode(
                 token,
@@ -120,7 +118,8 @@ class WorkspaceFileService(BaseService):
                 return None
             if payload.get("file_id") != str(file_id):
                 return None
-            return payload.get("sub")
+            sub = payload.get("sub")
+            return str(sub) if sub is not None else None
         except JWTError:
             return None
 
@@ -156,9 +155,7 @@ class WorkspaceFileService(BaseService):
         records = await self.file_repo.list_workspace_files(workspace_id)
         return [self._serialize_file(rec) for rec in records]
 
-    async def upload_file(
-        self, workspace_id: uuid.UUID, file: UploadFile, current_user: User
-    ) -> Dict:
+    async def upload_file(self, workspace_id: uuid.UUID, file: UploadFile, current_user: User) -> Dict:
         role = await self._ensure_member_role(workspace_id, current_user)
         self._check_permission(PermissionType.write, self._get_permission_by_role(role))
 
@@ -218,9 +215,7 @@ class WorkspaceFileService(BaseService):
         await self.file_repo.delete(record.id)
         await self.commit()
 
-    async def generate_download_url(
-        self, workspace_id: uuid.UUID, file_id: uuid.UUID, current_user: User
-    ) -> str:
+    async def generate_download_url(self, workspace_id: uuid.UUID, file_id: uuid.UUID, current_user: User) -> str:
         role = await self._ensure_member_role(workspace_id, current_user)
         self._check_permission(PermissionType.read, self._get_permission_by_role(role))
 
@@ -228,16 +223,18 @@ class WorkspaceFileService(BaseService):
         if not record:
             raise NotFoundException("File not found")
 
+        import uuid as uuid_lib
+
+        file_uuid = uuid_lib.UUID(file_id) if isinstance(file_id, str) else file_id
+        user_uuid = uuid_lib.UUID(current_user.id) if isinstance(current_user.id, str) else current_user.id
         token = jwt.encode(
-            self._token_payload(workspace_id, file_id, current_user.id),
+            self._token_payload(workspace_id, file_uuid, user_uuid),
             settings.secret_key,
             algorithm=settings.algorithm,
         )
         return f"{self._build_serve_path(workspace_id, file_id)}?token={token}"
 
-    async def get_file_record(
-        self, workspace_id: uuid.UUID, file_id: uuid.UUID
-    ):
+    async def get_file_record(self, workspace_id: uuid.UUID, file_id: uuid.UUID):
         record = await self.file_repo.get_by_id_and_workspace(file_id, workspace_id)
         if not record:
             raise NotFoundException("File not found")
@@ -276,4 +273,3 @@ class WorkspaceFileService(BaseService):
             "limitBytes": limit_bytes,
             "percentUsed": percent_used,
         }
-

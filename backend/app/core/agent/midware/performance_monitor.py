@@ -8,19 +8,18 @@ import threading
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import psutil
 
 if TYPE_CHECKING:
-    from langgraph.runtime import Runtime
+    pass
 
 from deepagents.backends.protocol import BackendProtocol
-from langchain.agents.middleware.types import (AgentMiddleware, AgentState,
-                                               ModelRequest, ModelResponse)
-from typing_extensions import NotRequired, TypedDict
+from langchain.agents.middleware.types import AgentMiddleware, AgentState, ModelRequest, ModelResponse
+from typing_extensions import NotRequired
 
 
 @dataclass
@@ -43,11 +42,11 @@ class PerformanceState(AgentState):
 
     session_id: NotRequired[str]
     """会话ID"""
-    request_count: NotRequired[int] = 0
+    request_count: NotRequired[int]
     """请求计数"""
-    total_response_time: NotRequired[float] = 0.0
+    total_response_time: NotRequired[float]
     """总响应时间"""
-    last_metrics: NotRequired[PerformanceRecord] = None
+    last_metrics: NotRequired[PerformanceRecord]
     """最后一次性能记录"""
 
 
@@ -73,9 +72,7 @@ class PerformanceCollector:
                     self.session_records[record.session_id] = []
                 self.session_records[record.session_id].append(record)
 
-    def update_tool_stats(
-        self, tool_name: str, execution_time: float, success: bool = True
-    ) -> None:
+    def update_tool_stats(self, tool_name: str, execution_time: float, success: bool = True) -> None:
         """更新工具统计"""
         with self._lock:
             if tool_name not in self.tool_stats:
@@ -113,14 +110,11 @@ class PerformanceCollector:
                 "avg_response_time": sum(response_times) / len(response_times),
                 "min_response_time": min(response_times),
                 "max_response_time": max(response_times),
-                "avg_token_count": sum(r.token_count for r in recent_records)
-                / len(recent_records),
+                "avg_token_count": sum(r.token_count for r in recent_records) / len(recent_records),
                 "total_tokens": sum(r.token_count for r in recent_records),
                 "total_tool_calls": sum(r.tool_calls for r in recent_records),
-                "avg_memory_usage": sum(r.memory_usage for r in recent_records)
-                / len(recent_records),
-                "avg_cpu_usage": sum(r.cpu_usage for r in recent_records)
-                / len(recent_records),
+                "avg_memory_usage": sum(r.memory_usage for r in recent_records) / len(recent_records),
+                "avg_cpu_usage": sum(r.cpu_usage for r in recent_records) / len(recent_records),
                 "active_sessions": len(self.session_records),
                 "timestamp": datetime.now().isoformat(),
             }
@@ -177,9 +171,7 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
         self._monitor_thread = None
 
         if enable_system_monitoring:
-            self._monitor_thread = threading.Thread(
-                target=self._monitor_system, daemon=True
-            )
+            self._monitor_thread = threading.Thread(target=self._monitor_system, daemon=True)
             self._monitor_thread.start()
 
     def _generate_session_id(self) -> str:
@@ -194,30 +186,30 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
             try:
                 self._cpu_usage = self.process.cpu_percent(interval=1.0)
                 self._memory_usage = self.process.memory_info().rss / 1024 / 1024  # MB
-            except:
+            except Exception:
                 pass
             time.sleep(1)
 
     def before_agent(
         self,
-        state: PerformanceState,
+        state: AgentState[Any],  # type: ignore[override]
         runtime,
-    ) -> PerformanceState:
+    ) -> dict[str, Any]:  # type: ignore[override]
         """在代理执行前初始化性能监控"""
         # 确保会话ID存在
         if "session_id" not in state:
-            return {"session_id": self.session_id}
-        return state
+            return {"session_id": self.session_id, "messages": []}
+        return state  # type: ignore[return-value]
 
     async def abefore_agent(
         self,
-        state: PerformanceState,
+        state: AgentState[Any],  # type: ignore[override]
         runtime,
-    ) -> PerformanceState:
+    ) -> dict[str, Any]:  # type: ignore[override]
         """异步：在代理执行前初始化性能监控"""
         if "session_id" not in state:
-            return {"session_id": self.session_id}
-        return state
+            return {"session_id": self.session_id, "messages": []}
+        return state  # type: ignore[return-value]
 
     def wrap_model_call(
         self,
@@ -241,9 +233,7 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
             for msg in request.messages:
                 if hasattr(msg, "content") and msg.content:
                     content += str(msg.content) + " "
-            request_tokens = (
-                self._estimate_tokens(content.strip()) if content.strip() else 0
-            )
+            request_tokens = self._estimate_tokens(content.strip()) if content.strip() else 0
 
         try:
             # 执行模型调用
@@ -263,15 +253,11 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
                 for msg in response.messages:
                     if hasattr(msg, "content") and msg.content:
                         content += str(msg.content) + " "
-                response_tokens = (
-                    self._estimate_tokens(content.strip()) if content.strip() else 0
-                )
+                response_tokens = self._estimate_tokens(content.strip()) if content.strip() else 0
             total_tokens = request_tokens + response_tokens
 
             # 获取工具调用数量
-            tool_calls = (
-                len(response.get("tool_results", [])) if hasattr(response, "get") else 0
-            )
+            tool_calls = len(response.get("tool_results", [])) if hasattr(response, "get") else 0
 
             # 创建性能记录
             record = PerformanceRecord(
@@ -282,7 +268,7 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
                 error_occurred=False,
                 memory_usage=current_memory,
                 cpu_usage=current_cpu,
-                session_id=request.state.get("session_id", ""),
+                session_id=str(request.state.get("session_id", "")),
                 request_type="model_call",
             )
 
@@ -290,12 +276,19 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
             self.collector.add_record(record)
 
             # 更新状态
-            request_count = request.state.get("request_count", 0) + 1
-            total_time = request.state.get("total_response_time", 0.0) + response_time
+            request_count = request.state.get("request_count", 0)
+            total_response_time = request.state.get("total_response_time", 0.0)
+            # Convert to int/float safely
+            request_count_int = int(request_count) if isinstance(request_count, (int, float)) else 0
+            total_response_time_float = (
+                float(total_response_time) if isinstance(total_response_time, (int, float)) else 0.0
+            )
+            request.state["request_count"] = request_count_int + 1  # type: ignore[typeddict-unknown-key, assignment]
+            request.state["total_response_time"] = total_response_time_float + response_time  # type: ignore[typeddict-unknown-key, assignment]
 
             return response
 
-        except Exception as e:
+        except Exception:
             # 记录错误指标
             end_time = time.time()
             response_time = end_time - start_time
@@ -308,7 +301,7 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
                 error_occurred=True,
                 memory_usage=current_memory,
                 cpu_usage=current_cpu,
-                session_id=request.state.get("session_id", ""),
+                session_id=str(request.state.get("session_id", "")),
                 request_type="model_call_error",
             )
 
@@ -338,9 +331,7 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
             for msg in request.messages:
                 if hasattr(msg, "content") and msg.content:
                     content += str(msg.content) + " "
-            request_tokens = (
-                self._estimate_tokens(content.strip()) if content.strip() else 0
-            )
+            request_tokens = self._estimate_tokens(content.strip()) if content.strip() else 0
 
         try:
             # 执行异步模型调用
@@ -358,13 +349,9 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
                 for msg in response.messages:
                     if hasattr(msg, "content") and msg.content:
                         content += str(msg.content) + " "
-                response_tokens = (
-                    self._estimate_tokens(content.strip()) if content.strip() else 0
-                )
+                response_tokens = self._estimate_tokens(content.strip()) if content.strip() else 0
             total_tokens = request_tokens + response_tokens
-            tool_calls = (
-                len(response.get("tool_results", [])) if hasattr(response, "get") else 0
-            )
+            tool_calls = len(response.get("tool_results", [])) if hasattr(response, "get") else 0
 
             record = PerformanceRecord(
                 timestamp=start_time,
@@ -374,7 +361,7 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
                 error_occurred=False,
                 memory_usage=current_memory,
                 cpu_usage=current_cpu,
-                session_id=request.state.get("session_id", ""),
+                session_id=str(request.state.get("session_id", "")),
                 request_type="model_call",
             )
 
@@ -382,7 +369,7 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
 
             return response
 
-        except Exception as e:
+        except Exception:
             end_time = time.time()
             response_time = end_time - start_time
 
@@ -394,7 +381,7 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
                 error_occurred=True,
                 memory_usage=current_memory,
                 cpu_usage=current_cpu,
-                session_id=request.state.get("session_id", ""),
+                session_id=str(request.state.get("session_id", "")),
                 request_type="model_call_error",
             )
 
@@ -444,9 +431,7 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
         # 准备导出数据
         data = {
             "export_timestamp": datetime.now().isoformat(),
-            "performance_summary": self.get_performance_summary(
-                time_window_minutes=1440
-            ),  # 24小时
+            "performance_summary": self.get_performance_summary(time_window_minutes=1440),  # 24小时
             "tool_performance": self.get_tool_performance(),
             "active_sessions": len(self.collector.session_records),
             "total_records": len(self.collector.records),
@@ -487,12 +472,8 @@ class PerformanceMonitorMiddleware(AgentMiddleware):
             return {
                 "session_id": session_id,
                 "total_requests": len(session_records),
-                "error_rate": (
-                    (errors / len(session_records)) * 100 if session_records else 0
-                ),
-                "avg_response_time": (
-                    sum(response_times) / len(response_times) if response_times else 0
-                ),
+                "error_rate": ((errors / len(session_records)) * 100 if session_records else 0),
+                "avg_response_time": (sum(response_times) / len(response_times) if response_times else 0),
                 "min_response_time": min(response_times) if response_times else 0,
                 "max_response_time": max(response_times) if response_times else 0,
                 "total_tokens": sum(r.token_count for r in session_records),

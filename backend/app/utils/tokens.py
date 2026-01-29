@@ -3,7 +3,6 @@
 from pathlib import Path
 
 from langchain_core.messages import SystemMessage
-
 from loguru import logger
 
 
@@ -37,9 +36,7 @@ def calculate_baseline_tokens(model, agent_dir: Path, system_prompt: str) -> int
     memory_system_prompt = get_memory_system_prompt()
 
     # Combine all parts in the same order as the middleware
-    full_system_prompt = (
-        memory_section + "\n\n" + system_prompt + "\n\n" + memory_system_prompt
-    )
+    full_system_prompt = memory_section + "\n\n" + system_prompt + "\n\n" + memory_system_prompt
 
     # Count tokens using the model's official method
     messages = [SystemMessage(content=full_system_prompt)]
@@ -48,7 +45,7 @@ def calculate_baseline_tokens(model, agent_dir: Path, system_prompt: str) -> int
         # Note: tools parameter is not supported by LangChain's token counting
         # Tool tokens will be included in the API response after first message
         token_count = model.get_num_tokens_from_messages(messages)
-        return token_count
+        return int(token_count)  # type: ignore[no-any-return]
     except NotImplementedError as e:
         # 某些模型（如GLM、自定义模型）没有实现token计数方法
         logger.info(f"[yellow]Token计数不可用: {e}[/yellow]")
@@ -86,9 +83,7 @@ def estimate_token_count(text: str) -> int:
     # 分离中文字符和英文内容
     chinese_chars = len(re.findall(r"[\u4e00-\u9fff]", text))
     english_words = len(re.findall(r"\b[a-zA-Z]+\b", text))
-    other_chars = (
-        len(text) - chinese_chars - len("".join(re.findall(r"\b[a-zA-Z]+\b", text)))
-    )
+    other_chars = len(text) - chinese_chars - len("".join(re.findall(r"\b[a-zA-Z]+\b", text)))
 
     # 估算token数
     estimated_tokens = chinese_chars * 2 + english_words * 1.3 + other_chars * 0.5
@@ -101,8 +96,7 @@ def get_memory_system_prompt() -> str:
     # Import from agent_memory middleware
     from ..midware.memory_in_file import LONGTERM_MEMORY_SYSTEM_PROMPT
 
-    return LONGTERM_MEMORY_SYSTEM_PROMPT.format(memory_path="/memories/")
-
+    return str(LONGTERM_MEMORY_SYSTEM_PROMPT.format(memory_path="/memories/"))
 
 
 def count_tokens(text: str) -> int:
@@ -132,6 +126,7 @@ def count_tokens(text: str) -> int:
         return len(tokens)
     except ImportError:
         from loguru import logger
+
         logger.warning(
             "tiktoken not installed. You can install with `pip install -U tiktoken`. Using character-based estimation."
         )

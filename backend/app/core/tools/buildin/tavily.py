@@ -2,8 +2,9 @@ import json
 from os import getenv
 from typing import Any, Dict, List, Literal, Optional
 
-from app.core.tools.toolkit import Toolkit
 from loguru import logger
+
+from app.core.tools.toolkit import Toolkit
 
 try:
     from tavily import TavilyClient
@@ -136,8 +137,13 @@ class TavilyTools(Toolkit):
             str: JSON string of results related to the query.
         """
 
-        return self.client.get_search_context(
-            query=query, search_depth=self.search_depth, max_tokens=self.max_tokens, include_answer=self.include_answer
+        return str(
+            self.client.get_search_context(
+                query=query,
+                search_depth=self.search_depth,
+                max_tokens=self.max_tokens,
+                include_answer=self.include_answer,
+            )
         )
 
     def extract_url_content(self, urls: str) -> str:

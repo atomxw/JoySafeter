@@ -1,12 +1,14 @@
 """
 AuthUser Repository
 """
+
 from typing import Optional
 
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
 
 from app.models.auth import AuthUser
+
 from .base import BaseRepository
 
 
@@ -52,4 +54,3 @@ class AuthUserRepository(BaseRepository[AuthUser]):
             .limit(limit)
         )
         return list(result.scalars().all())
-

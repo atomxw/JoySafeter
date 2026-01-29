@@ -1,6 +1,7 @@
 """
 CustomTool 服务：权限校验 + 配额限制 + CRUD
 """
+
 from __future__ import annotations
 
 import uuid
@@ -9,6 +10,7 @@ from typing import Dict, List, Optional
 from app.common.exceptions import BadRequestException, ForbiddenException, NotFoundException
 from app.models.custom_tool import CustomTool
 from app.repositories.custom_tool import CustomToolRepository
+
 from .base import BaseService
 
 MAX_TOOLS_PER_USER = 100
@@ -21,7 +23,7 @@ class CustomToolService(BaseService[CustomTool]):
 
     async def list_tools(self, current_user_id: str) -> List[CustomTool]:
         """获取当前用户的所有工具"""
-        return await self.repo.list_by_user(current_user_id)
+        return await self.repo.list_by_user(current_user_id)  # type: ignore
 
     async def create_tool(
         self,
@@ -70,7 +72,7 @@ class CustomToolService(BaseService[CustomTool]):
         tool = await self.repo.get(tool_id)
         if not tool:
             raise NotFoundException("Custom tool not found")
-        
+
         # 验证所有权
         if tool.owner_id != current_user_id:
             raise ForbiddenException("You can only update your own tools")
@@ -91,18 +93,17 @@ class CustomToolService(BaseService[CustomTool]):
 
         await self.db.commit()
         await self.db.refresh(tool)
-        return tool
+        return tool  # type: ignore
 
     async def delete_tool(self, tool_id: uuid.UUID, current_user_id: str) -> None:
         """删除工具"""
         tool = await self.repo.get(tool_id)
         if not tool:
             raise NotFoundException("Custom tool not found")
-        
+
         # 验证所有权
         if tool.owner_id != current_user_id:
             raise ForbiddenException("You can only delete your own tools")
-        
+
         await self.repo.delete_by_id(tool_id)
         await self.db.commit()
-

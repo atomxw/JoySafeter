@@ -1,14 +1,15 @@
 """
 工作空间文件管理 API（版本化路径 /api/v1/workspaces）
 """
+
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, Request
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.dependencies import get_current_user, get_current_user_optional, require_workspace_role
+from app.common.dependencies import get_current_user_optional, require_workspace_role
 from app.common.exceptions import AppException, ConflictException
 from app.common.response import success_response
 from app.core.database import get_db
@@ -131,4 +132,3 @@ async def serve_workspace_file(
         media_type=record.content_type or "application/octet-stream",
         filename=record.original_name,
     )
-

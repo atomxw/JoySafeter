@@ -1,6 +1,7 @@
 """
 模型供应商服务
 """
+
 from typing import Any, Dict, List
 
 from sqlalchemy import select
@@ -35,8 +36,8 @@ class ModelProviderService(BaseService):
         from loguru import logger
 
         factory_providers = self.factory.get_all_providers()
-        synced_providers = []
-        errors = []
+        synced_providers: List[Dict[str, Any]] = []
+        errors: List[str] = []
 
         for provider_info in factory_providers:
             provider_name = provider_info["provider_name"]
@@ -49,25 +50,52 @@ class ModelProviderService(BaseService):
 
                 if existing:
                     # 更新现有供应商
-                    await self.repo.update(existing.id, {
-                        "display_name": provider_info.get("display_name", existing.display_name),
-                        "supported_model_types": provider_info.get("supported_model_types", []),
-                        "credential_schema": provider_info.get("credential_schema", {}),
-                        "config_schema": config_schemas,  # 注意：数据库字段是 config_schema（单数）
-                    })
-                    synced_providers.append(existing)
+                    await self.repo.update(
+                        existing.id,
+                        {
+                            "display_name": provider_info.get("display_name", existing.display_name),
+                            "supported_model_types": provider_info.get("supported_model_types", []),
+                            "credential_schema": provider_info.get("credential_schema", {}),
+                            "config_schema": config_schemas,  # 注意：数据库字段是 config_schema（单数）
+                        },
+                    )
+                    # Convert ModelProvider to dict
+                    synced_providers.append(
+                        {
+                            "id": str(existing.id),
+                            "name": existing.name,
+                            "display_name": existing.display_name,
+                            "supported_model_types": existing.supported_model_types or [],
+                            "credential_schema": existing.credential_schema or {},
+                            "config_schema": existing.config_schema or {},
+                            "is_enabled": existing.is_enabled,
+                        }
+                    )
                     logger.debug(f"已更新供应商: {provider_name}")
                 else:
                     # 创建新供应商
-                    new_provider = await self.repo.create({
-                        "name": provider_name,
-                        "display_name": provider_info.get("display_name", provider_name),
-                        "supported_model_types": provider_info.get("supported_model_types", []),
-                        "credential_schema": provider_info.get("credential_schema", {}),
-                        "config_schema": config_schemas,  # 注意：数据库字段是 config_schema（单数）
-                        "is_enabled": True,
-                    })
-                    synced_providers.append(new_provider)
+                    new_provider = await self.repo.create(
+                        {
+                            "name": provider_name,
+                            "display_name": provider_info.get("display_name", provider_name),
+                            "supported_model_types": provider_info.get("supported_model_types", []),
+                            "credential_schema": provider_info.get("credential_schema", {}),
+                            "config_schema": config_schemas,  # 注意：数据库字段是 config_schema（单数）
+                            "is_enabled": True,
+                        }
+                    )
+                    # Convert ModelProvider to dict
+                    synced_providers.append(
+                        {
+                            "id": str(new_provider.id),
+                            "name": new_provider.name,
+                            "display_name": new_provider.display_name,
+                            "supported_model_types": new_provider.supported_model_types or [],
+                            "credential_schema": new_provider.credential_schema or {},
+                            "config_schema": new_provider.config_schema or {},
+                            "is_enabled": new_provider.is_enabled,
+                        }
+                    )
                     logger.debug(f"已创建供应商: {provider_name}")
             except Exception as e:
                 error_msg = f"同步供应商 {provider_name} 失败: {str(e)}"
@@ -190,7 +218,7 @@ class ModelProviderService(BaseService):
         """
         from loguru import logger
 
-        result = {
+        result: Dict[str, Any] = {
             "providers": 0,
             "models": 0,
             "credentials": 0,  # 已移除，始终为 0
@@ -261,14 +289,16 @@ class ModelProviderService(BaseService):
                             logger.debug(f"模型已存在: {provider.name}/{model_name}")
                         else:
                             # 创建新的全局模型记录
-                            await self.instance_repo.create({
-                                "user_id": None,  # 全局记录
-                                "workspace_id": None,  # 全局记录
-                                "provider_id": provider.id,
-                                "model_name": model_name,
-                                "model_parameters": {},
-                                "is_default": False,
-                            })
+                            await self.instance_repo.create(
+                                {
+                                    "user_id": None,  # 全局记录
+                                    "workspace_id": None,  # 全局记录
+                                    "provider_id": provider.id,
+                                    "model_name": model_name,
+                                    "model_parameters": {},
+                                    "is_default": False,
+                                }
+                            )
                             synced_count += 1
                             logger.debug(f"已创建模型: {provider.name}/{model_name}")
                 except Exception as e:
@@ -278,9 +308,9 @@ class ModelProviderService(BaseService):
         default_instance = await self.instance_repo.get_default()
         if not default_instance:
             # 查询所有全局模型（user_id 为 None），按 created_at 升序排序
-            query = select(ModelInstance).where(
-                ModelInstance.user_id.is_(None)
-            ).order_by(ModelInstance.created_at.asc())
+            query = (
+                select(ModelInstance).where(ModelInstance.user_id.is_(None)).order_by(ModelInstance.created_at.asc())
+            )
             result = await self.db.execute(query)
             global_models = list(result.scalars().all())
 
@@ -303,7 +333,6 @@ class ModelProviderService(BaseService):
             始终返回 0
         """
         from loguru import logger
-        
+
         logger.warning("_sync_credentials() 已废弃，所有凭据应通过前端页面配置")
         return 0
-

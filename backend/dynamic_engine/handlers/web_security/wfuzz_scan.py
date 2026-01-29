@@ -9,14 +9,14 @@ logger = logging.getLogger(__name__)
 
 class WfuzzHandler(AbstractHandler):
     """Handler for wfuzz functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['wfuzz']
-    
+        """Handler related commands"""
+        return ["wfuzz"]
+
     def handle(self, data: Dict) -> Any:
         """Execute wfuzz with enhanced logging"""
         try:
@@ -25,11 +25,7 @@ class WfuzzHandler(AbstractHandler):
             additional_args = data.get("additional_args", "")
             if not url:
                 logger.warning("🌐 Wfuzz called without URL parameter")
-                return {
-    
-                    "error": "URL parameter is required"
-                
-                }
+                return {"error": "URL parameter is required"}
             command = f"wfuzz -w {wordlist} '{url}'"
             if additional_args:
                 command += f" {additional_args}"
@@ -39,8 +35,4 @@ class WfuzzHandler(AbstractHandler):
             return result
         except Exception as e:
             logger.error(f"💥 Error in wfuzz endpoint: {str(e)}")
-            return {
-    
-                "error": f"Server error: {str(e)}"
-            
-            }
+            return {"error": f"Server error: {str(e)}"}

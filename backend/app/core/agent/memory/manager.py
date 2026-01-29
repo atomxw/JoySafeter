@@ -1,30 +1,26 @@
 from dataclasses import dataclass
-from os import getenv
 from textwrap import dedent
 from typing import Any, Callable, Dict, List, Literal, Optional, Type, Union
 
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages.chat import ChatMessage as Message
+from loguru import logger
 from pydantic import BaseModel, Field
 
-from app.services.memory_service import MemoryService
-from app.schemas.memory import UserMemory
 from app.core.agent.memory.strategies import (
     MemoryOptimizationStrategy,
     MemoryOptimizationStrategyFactory,
     MemoryOptimizationStrategyType,
 )
-from langchain_core.language_models import BaseChatModel
-from langchain_core.messages.chat import ChatMessage as Message
-from app.core.tools.tool import EnhancedTool
-from app.utils.datetime import utc_now
-
-from app.utils.prompts import get_json_output_prompt
-from app.utils.string import parse_response_model_str
-
-from loguru import logger
 
 # Import DEFAULT_USER_ID for consistent user_id handling
 from app.core.constants import DEFAULT_USER_ID
-
+from app.core.tools.tool import EnhancedTool
+from app.schemas.memory import UserMemory
+from app.services.memory_service import MemoryService
+from app.utils.datetime import utc_now
+from app.utils.prompts import get_json_output_prompt
+from app.utils.string import parse_response_model_str
 
 
 class MemorySearchResponse(BaseModel):
@@ -93,30 +89,30 @@ class MemoryManager:
         self.debug_mode = debug_mode
 
         # TODO not impl model config
-        #if self.model is not None:
+        # if self.model is not None:
         #    self.model = get_model(self.model)
 
     def get_model(self) -> BaseChatModel:
         if self.model is None:
             try:
                 from app.dynamic_agent.infra.llm import get_default_llm
+
                 self.model = get_default_llm()
             except Exception as e:
                 logger.error(f"Failed to get default model from settings: {e}")
-                raise ValueError(
-                    "无法获取默认模型配置，请先在系统中配置默认模型"
-                )
+                raise ValueError("无法获取默认模型配置，请先在系统中配置默认模型")
         return self.model
 
     def _get_message_content_string(self, msg: Message) -> str:
         """Extract content string from message, supporting both get_content_string() and content attribute.
-        
+
         This method handles different message types:
         - Messages with get_content_string() method (e.g., app.models.message.Message)
         - Messages with content attribute (e.g., langchain_core.messages.chat.ChatMessage)
         """
         if hasattr(msg, "get_content_string"):
-            return msg.get_content_string()
+            result = msg.get_content_string()
+            return str(result) if result is not None else ""
         elif hasattr(msg, "content"):
             content = msg.content
             if isinstance(content, str):
@@ -173,124 +169,124 @@ class MemoryManager:
         return None
 
     def set_log_level(self):
-        #TODO not impl
+        # TODO not impl
         pass
-        '''
+        """
         if self.debug_mode or getenv("AGNO_DEBUG", "false").lower() == "true":
             self.debug_mode = True
             set_log_level_to_debug()
         else:
             set_log_level_to_info()
-        '''
+        """
 
     def initialize(self, user_id: Optional[str] = None):
         self.set_log_level()
 
     def _build_tool_map(self, tools: List[Callable]) -> Dict[str, Callable]:
         """Build a mapping from tool name to tool callable.
-        
+
         Supports both:
         - EnhancedTool/BaseTool objects (with .name attribute)
         - Regular functions (with __name__ attribute)
         """
         tool_map = {}
         for tool in tools:
-            if hasattr(tool, 'name'):  # EnhancedTool or BaseTool
+            if hasattr(tool, "name"):  # EnhancedTool or BaseTool
                 tool_map[tool.name] = tool
-            elif hasattr(tool, '__name__'):  # Regular function
+            elif hasattr(tool, "__name__"):  # Regular function
                 tool_map[tool.__name__] = tool
         return tool_map
 
     def _execute_tool_calls(self, tool_calls: List[Dict], tool_map: Dict[str, Callable]) -> bool:
         """Execute tool calls synchronously.
-        
+
         Args:
             tool_calls: List of tool call dicts with 'name' and 'args' keys
             tool_map: Mapping from tool name to tool callable
-            
+
         Returns:
             True if any tools were executed
         """
         if not tool_calls:
             return False
-            
+
         logger.info(f"Executing {len(tool_calls)} tool calls...")
         executed = False
-        
+
         for tool_call in tool_calls:
             tool_name = tool_call.get("name")
             tool_args = tool_call.get("args", {})
-            
+
             if tool_name not in tool_map:
                 logger.warning(f"Unknown tool: {tool_name}")
                 continue
-                
+
             try:
                 logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
                 tool = tool_map[tool_name]
-                
+
                 # Handle different tool types
-                if hasattr(tool, 'invoke'):
+                if hasattr(tool, "invoke"):
                     result = tool.invoke(tool_args)
-                elif hasattr(tool, 'run'):
+                elif hasattr(tool, "run"):
                     result = tool.run(**tool_args)
                 elif callable(tool):
                     result = tool(**tool_args)
                 else:
                     result = f"Tool {tool_name} is not callable"
-                    
+
                 logger.info(f"Tool {tool_name} result: {result}")
                 executed = True
             except Exception as e:
                 logger.error(f"Error executing tool {tool_name}: {e}")
-                
+
         return executed
 
     async def _aexecute_tool_calls(self, tool_calls: List[Dict], tool_map: Dict[str, Callable]) -> bool:
         """Execute tool calls asynchronously.
-        
+
         Args:
             tool_calls: List of tool call dicts with 'name' and 'args' keys
             tool_map: Mapping from tool name to tool callable
-            
+
         Returns:
             True if any tools were executed
         """
         if not tool_calls:
             return False
-            
+
         logger.info(f"Executing {len(tool_calls)} tool calls (async)...")
         executed = False
-        
+
         for tool_call in tool_calls:
             tool_name = tool_call.get("name")
             tool_args = tool_call.get("args", {})
-            
+
             if tool_name not in tool_map:
                 logger.warning(f"Unknown tool: {tool_name}")
                 continue
-                
+
             try:
                 logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
                 tool = tool_map[tool_name]
-                
+
                 # Handle different tool types - prefer async methods
-                if hasattr(tool, 'ainvoke'):
+                if hasattr(tool, "ainvoke"):
                     result = await tool.ainvoke(tool_args)
-                elif hasattr(tool, 'invoke'):
+                elif hasattr(tool, "invoke"):
                     result = tool.invoke(tool_args)
-                elif hasattr(tool, 'run'):
+                elif hasattr(tool, "run"):
                     result = tool.run(**tool_args)
                 elif callable(tool):
                     result = tool(**tool_args)
                 else:
                     result = f"Tool {tool_name} is not callable"
-                    
+
                 logger.info(f"Tool {tool_name} result: {result}")
                 executed = True
             except Exception as e:
                 logger.error(f"Error executing tool {tool_name}: {e}")
-                
+
         return executed
 
     # -*- Public Functions
@@ -303,7 +299,8 @@ class MemoryManager:
             memories = self.read_from_db(user_id=user_id)
             if memories is None:
                 return []
-            return memories.get(user_id, [])
+            result = memories.get(user_id, [])
+            return result if isinstance(result, list) else []
         else:
             logger.warning("Memory Db not provided.")
             return []
@@ -317,7 +314,8 @@ class MemoryManager:
             memories = await self.aread_from_db(user_id=user_id)
             if memories is None:
                 return []
-            return memories.get(user_id, [])
+            result = memories.get(user_id, [])
+            return result if isinstance(result, list) else []
         else:
             logger.warning("Memory Db not provided.")
             return []
@@ -332,9 +330,11 @@ class MemoryManager:
             if memories is None:
                 return None
             memories_for_user = memories.get(user_id, [])
+            if not isinstance(memories_for_user, list):
+                return None
             for memory in memories_for_user:
                 if memory.memory_id == memory_id:
-                    return memory
+                    return memory  # type: ignore[no-any-return]
             return None
         else:
             logger.warning("Memory Db not provided.")
@@ -364,7 +364,7 @@ class MemoryManager:
             memory.user_id = user_id
 
             if not memory.updated_at:
-                memory.updated_at = utc_now()
+                memory.updated_at = int(utc_now().timestamp())
 
             self._upsert_db_memory(memory=memory)
             return memory.memory_id
@@ -392,7 +392,7 @@ class MemoryManager:
                 user_id = DEFAULT_USER_ID
 
             if not memory.updated_at:
-                memory.updated_at = utc_now()
+                memory.updated_at = int(utc_now().timestamp())
 
             memory.memory_id = memory_id
             memory.user_id = user_id
@@ -407,7 +407,11 @@ class MemoryManager:
     def clear(self) -> None:
         """Clears the memory."""
         if self.db:
-            self.db.clear_memories()
+            result = self.db.clear_memories()
+            if hasattr(result, "__await__"):
+                import asyncio
+
+                asyncio.create_task(result)  # type: ignore[unused-coroutine]
 
     def delete_user_memory(
         self,
@@ -558,7 +562,9 @@ class MemoryManager:
         team_id: Optional[str] = None,
         user_id: Optional[str] = None,
     ) -> str:
-        logger.info(f"Creating memories for user {user_id}, message: {message}, messages: {messages}, agent_id: {agent_id}, team_id: {team_id}")
+        logger.info(
+            f"Creating memories for user {user_id}, message: {message}, messages: {messages}, agent_id: {agent_id}, team_id: {team_id}"
+        )
         """Creates memories from multiple messages and adds them to the memory db."""
         self.set_log_level()
 
@@ -692,7 +698,11 @@ class MemoryManager:
         try:
             if not self.db:
                 raise ValueError("Memory db not initialized")
-            self.db.upsert_user_memory(memory=memory)
+            result = self.db.upsert_user_memory(memory=memory)
+            if hasattr(result, "__await__"):
+                import asyncio
+
+                asyncio.create_task(result)  # type: ignore[unused-coroutine]
             return "Memory added successfully"
         except Exception as e:
             logger.warning(f"Error storing memory in db: {e}")
@@ -707,7 +717,11 @@ class MemoryManager:
             if user_id is None:
                 user_id = DEFAULT_USER_ID
 
-            self.db.delete_user_memory(memory_id=memory_id, user_id=user_id)
+            result = self.db.delete_user_memory(memory_id=memory_id, user_id=user_id)
+            if hasattr(result, "__await__"):
+                import asyncio
+
+                asyncio.create_task(result)  # type: ignore[unused-coroutine]
             return "Memory deleted successfully"
         except Exception as e:
             logger.warning(f"Error deleting memory in db: {e}")
@@ -768,7 +782,7 @@ class MemoryManager:
 
     def _get_response_format(self) -> Union[Dict[str, Any], Type[BaseModel]]:
         """Get response format for structured output.
-        
+
         Note: This method is deprecated for LangChain models.
         Use with_structured_output() instead.
         """
@@ -806,7 +820,8 @@ class MemoryManager:
         system_message_str += "REMEMBER: Only return the IDs of the memories that are related to the query."
 
         if response_format == {"type": "json_object"}:
-            system_message_str += "\n" + get_json_output_prompt(MemorySearchResponse)  # type: ignore
+            # MemorySearchResponse is a class, not a type, so pass it directly
+            system_message_str += "\n" + get_json_output_prompt(MemorySearchResponse)  # type: ignore[arg-type]  # type: ignore
 
         messages_for_model = [
             Message(role="system", content=system_message_str),
@@ -821,13 +836,21 @@ class MemoryManager:
         memory_search: Optional[MemorySearchResponse] = None
         try:
             model_with_structure = model.with_structured_output(MemorySearchResponse)
-            memory_search = model_with_structure.invoke(messages_for_model)
+            memory_search_raw = model_with_structure.invoke(messages_for_model)
+            if isinstance(memory_search_raw, MemorySearchResponse):
+                memory_search = memory_search_raw
+            elif isinstance(memory_search_raw, BaseModel):
+                memory_search = memory_search_raw  # type: ignore[assignment]
+            else:
+                memory_search = None
         except Exception:
             # Fallback to regular invoke and parse response
             try:
                 response = model.invoke(messages_for_model)
                 if isinstance(response.content, str):
                     memory_search = parse_response_model_str(response.content, MemorySearchResponse)  # type: ignore
+                else:
+                    memory_search = None
             except Exception as e:
                 logger.warning(f"Failed to search memories: {e}")
                 return []
@@ -997,7 +1020,9 @@ class MemoryManager:
 
         return sorted_memories_list
 
-    async def _asearch_user_memories_agentic(self, user_id: str, query: str, limit: Optional[int] = None) -> List[UserMemory]:
+    async def _asearch_user_memories_agentic(
+        self, user_id: str, query: str, limit: Optional[int] = None
+    ) -> List[UserMemory]:
         """Async version: Search through user memories using agentic search."""
         memories = await self.aread_from_db(user_id=user_id)
         if memories is None:
@@ -1028,7 +1053,8 @@ class MemoryManager:
         system_message_str += "REMEMBER: Only return the IDs of the memories that are related to the query."
 
         if response_format == {"type": "json_object"}:
-            system_message_str += "\n" + get_json_output_prompt(MemorySearchResponse)
+            # MemorySearchResponse is a class, not a type, so pass it directly
+            system_message_str += "\n" + get_json_output_prompt(MemorySearchResponse)  # type: ignore[arg-type]
 
         messages_for_model = [
             Message(role="system", content=system_message_str),
@@ -1043,13 +1069,25 @@ class MemoryManager:
         memory_search: Optional[MemorySearchResponse] = None
         try:
             model_with_structure = model.with_structured_output(MemorySearchResponse)
-            memory_search = await model_with_structure.ainvoke(messages_for_model)
+            memory_search_raw = await model_with_structure.ainvoke(messages_for_model)
+            if isinstance(memory_search_raw, MemorySearchResponse):
+                memory_search = memory_search_raw
+            elif isinstance(memory_search_raw, BaseModel):
+                memory_search = memory_search_raw  # type: ignore[assignment]
+            else:
+                memory_search = None
         except Exception:
             # Fallback to regular ainvoke and parse response
             try:
                 response = await model.ainvoke(messages_for_model)
                 if isinstance(response.content, str):
-                    memory_search = parse_response_model_str(response.content, MemorySearchResponse)
+                    memory_search_parsed = parse_response_model_str(response.content, MemorySearchResponse)
+                    if isinstance(memory_search_parsed, MemorySearchResponse):
+                        memory_search = memory_search_parsed
+                    else:
+                        memory_search = None  # type: ignore[assignment]
+                else:
+                    memory_search = None
             except Exception as e:
                 logger.warning(f"Failed to search memories (async): {e}")
                 return []
@@ -1109,7 +1147,7 @@ class MemoryManager:
 
         # Optimize memories using strategy
         optimization_model = self.get_model()
-        optimized_memories = strategy_instance.optimize(memories=memories, model=optimization_model)
+        optimized_memories = strategy_instance.optimize(memories=memories, model=optimization_model)  # type: ignore[arg-type]
 
         # Apply to database if requested
         if apply:
@@ -1179,7 +1217,7 @@ class MemoryManager:
 
         # Optimize memories using strategy (async)
         optimization_model = self.get_model()
-        optimized_memories = await strategy_instance.aoptimize(memories=memories, model=optimization_model)
+        optimized_memories = await strategy_instance.aoptimize(memories=memories, model=optimization_model)  # type: ignore[arg-type]
 
         # Apply to database if requested
         if apply:
@@ -1222,7 +1260,8 @@ class MemoryManager:
                 if function_name in _function_names:
                     continue
                 _function_names.append(function_name)
-                func = EnhancedTool.from_callable(tool,
+                func = EnhancedTool.from_callable(
+                    tool,
                     name=function_name,
                     description=tool.__doc__,
                 )
@@ -1377,23 +1416,23 @@ class MemoryManager:
             # Build a map of tool name -> tool (supports both functions and EnhancedTool objects)
             tool_map = {}
             for tool in _tools:
-                if hasattr(tool, 'name'):  # EnhancedTool or BaseTool
+                if hasattr(tool, "name"):  # EnhancedTool or BaseTool
                     tool_map[tool.name] = tool
-                elif hasattr(tool, '__name__'):  # Regular function
+                elif hasattr(tool, "__name__"):  # Regular function
                     tool_map[tool.__name__] = tool
-            
+
             for tool_call in response.tool_calls:
                 tool_name = tool_call.get("name")
                 tool_args = tool_call.get("args", {})
-                
+
                 if tool_name in tool_map:
                     try:
                         logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
                         tool = tool_map[tool_name]
                         # Handle both callable functions and tool objects with invoke/run
-                        if hasattr(tool, 'invoke'):
+                        if hasattr(tool, "invoke"):
                             result = tool.invoke(tool_args)
-                        elif hasattr(tool, 'run'):
+                        elif hasattr(tool, "run"):
                             result = tool.run(**tool_args)
                         elif callable(tool):
                             result = tool(**tool_args)
@@ -1404,14 +1443,17 @@ class MemoryManager:
                         logger.error(f"Error executing tool {tool_name}: {e}")
                 else:
                     logger.warning(f"Unknown tool: {tool_name}")
-            
+
             self.memories_updated = True
         else:
             logger.debug("Model did not return any tool calls")
-        
+
         logger.debug("MemoryManager End", center=True)
 
-        return response.content or "No response from model"
+        content = response.content if hasattr(response, "content") else "No response from model"
+        if isinstance(content, list):
+            return " ".join(str(item) for item in content)
+        return str(content) if content is not None else "No response from model"
 
     async def acreate_or_update_memories(
         self,
@@ -1491,25 +1533,25 @@ class MemoryManager:
             # Build a map of tool name -> tool (supports both functions and EnhancedTool objects)
             tool_map = {}
             for tool in _tools:
-                if hasattr(tool, 'name'):  # EnhancedTool or BaseTool
+                if hasattr(tool, "name"):  # EnhancedTool or BaseTool
                     tool_map[tool.name] = tool
-                elif hasattr(tool, '__name__'):  # Regular function
+                elif hasattr(tool, "__name__"):  # Regular function
                     tool_map[tool.__name__] = tool
-            
+
             for tool_call in response.tool_calls:
                 tool_name = tool_call.get("name")
                 tool_args = tool_call.get("args", {})
-                
+
                 if tool_name in tool_map:
                     try:
                         logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
                         tool = tool_map[tool_name]
                         # Handle both callable functions and tool objects with invoke/ainvoke
-                        if hasattr(tool, 'ainvoke'):
+                        if hasattr(tool, "ainvoke"):
                             result = await tool.ainvoke(tool_args)
-                        elif hasattr(tool, 'invoke'):
+                        elif hasattr(tool, "invoke"):
                             result = tool.invoke(tool_args)
-                        elif hasattr(tool, 'run'):
+                        elif hasattr(tool, "run"):
                             result = tool.run(**tool_args)
                         elif callable(tool):
                             result = tool(**tool_args)
@@ -1520,14 +1562,17 @@ class MemoryManager:
                         logger.error(f"Error executing tool {tool_name}: {e}")
                 else:
                     logger.warning(f"Unknown tool: {tool_name}")
-            
+
             self.memories_updated = True
         else:
             logger.debug("Model did not return any tool calls")
-        
+
         logger.debug("MemoryManager End", center=True)
 
-        return response.content or "No response from model"
+        content = response.content if hasattr(response, "content") else "No response from model"
+        if isinstance(content, list):
+            return " ".join(str(item) for item in content)
+        return str(content) if content is not None else "No response from model"
 
     def run_memory_task(
         self,
@@ -1586,23 +1631,23 @@ class MemoryManager:
             # Build a map of tool name -> tool (supports both functions and EnhancedTool objects)
             tool_map = {}
             for tool in _tools:
-                if hasattr(tool, 'name'):  # EnhancedTool or BaseTool
+                if hasattr(tool, "name"):  # EnhancedTool or BaseTool
                     tool_map[tool.name] = tool
-                elif hasattr(tool, '__name__'):  # Regular function
+                elif hasattr(tool, "__name__"):  # Regular function
                     tool_map[tool.__name__] = tool
-            
+
             for tool_call in response.tool_calls:
                 tool_name = tool_call.get("name")
                 tool_args = tool_call.get("args", {})
-                
+
                 if tool_name in tool_map:
                     try:
                         logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
                         tool = tool_map[tool_name]
                         # Handle both callable functions and tool objects with invoke/run
-                        if hasattr(tool, 'invoke'):
+                        if hasattr(tool, "invoke"):
                             result = tool.invoke(tool_args)
-                        elif hasattr(tool, 'run'):
+                        elif hasattr(tool, "run"):
                             result = tool.run(**tool_args)
                         elif callable(tool):
                             result = tool(**tool_args)
@@ -1613,14 +1658,17 @@ class MemoryManager:
                         logger.error(f"Error executing tool {tool_name}: {e}")
                 else:
                     logger.warning(f"Unknown tool: {tool_name}")
-            
+
             self.memories_updated = True
         else:
             logger.debug("Model did not return any tool calls")
-        
+
         logger.debug("MemoryManager End", center=True)
 
-        return response.content or "No response from model"
+        content = response.content if hasattr(response, "content") else "No response from model"
+        if isinstance(content, list):
+            return " ".join(str(item) for item in content)
+        return str(content) if content is not None else "No response from model"
 
     async def arun_memory_task(
         self,
@@ -1692,25 +1740,25 @@ class MemoryManager:
             # Build a map of tool name -> tool (supports both functions and EnhancedTool objects)
             tool_map = {}
             for tool in _tools:
-                if hasattr(tool, 'name'):  # EnhancedTool or BaseTool
+                if hasattr(tool, "name"):  # EnhancedTool or BaseTool
                     tool_map[tool.name] = tool
-                elif hasattr(tool, '__name__'):  # Regular function
+                elif hasattr(tool, "__name__"):  # Regular function
                     tool_map[tool.__name__] = tool
-            
+
             for tool_call in response.tool_calls:
                 tool_name = tool_call.get("name")
                 tool_args = tool_call.get("args", {})
-                
+
                 if tool_name in tool_map:
                     try:
                         logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
                         tool = tool_map[tool_name]
                         # Handle both callable functions and tool objects with invoke/ainvoke
-                        if hasattr(tool, 'ainvoke'):
+                        if hasattr(tool, "ainvoke"):
                             result = await tool.ainvoke(tool_args)
-                        elif hasattr(tool, 'invoke'):
+                        elif hasattr(tool, "invoke"):
                             result = tool.invoke(tool_args)
-                        elif hasattr(tool, 'run'):
+                        elif hasattr(tool, "run"):
                             result = tool.run(**tool_args)
                         elif callable(tool):
                             result = tool(**tool_args)
@@ -1721,14 +1769,17 @@ class MemoryManager:
                         logger.error(f"Error executing tool {tool_name}: {e}")
                 else:
                     logger.warning(f"Unknown tool: {tool_name}")
-            
+
             self.memories_updated = True
         else:
             logger.debug("Model did not return any tool calls")
-        
+
         logger.debug("MemoryManager End", center=True)
 
-        return response.content or "No response from model"
+        content = response.content if hasattr(response, "content") else "No response from model"
+        if isinstance(content, list):
+            return " ".join(str(item) for item in content)
+        return str(content) if content is not None else "No response from model"
 
     # -*- DB Functions
     def _get_db_tools(
@@ -1743,6 +1794,38 @@ class MemoryManager:
         agent_id: Optional[str] = None,
         team_id: Optional[str] = None,
     ) -> List[Callable]:
+        def _run_async(coro):
+            """Helper to run async code in sync context"""
+            import asyncio
+
+            try:
+                # Event loop is running, need to use a different approach
+                import threading
+
+                result = None
+                exception = None
+
+                def run_in_thread():
+                    nonlocal result, exception
+                    try:
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        result = new_loop.run_until_complete(coro)
+                        new_loop.close()
+                    except Exception as e:
+                        exception = e
+
+                thread = threading.Thread(target=run_in_thread)
+                thread.start()
+                thread.join()
+
+                if exception:
+                    raise exception
+                return result
+            except RuntimeError:
+                # No event loop running, safe to use asyncio.run
+                return asyncio.run(coro)
+
         def add_memory(memory: str, topics: Optional[List[str]] = None) -> str:
             """Use this function to add a memory to the database.
             Args:
@@ -1751,23 +1834,47 @@ class MemoryManager:
             Returns:
                 str: A message indicating if the memory was added successfully or not.
             """
+            import asyncio
             from uuid import uuid4
 
             from app.schemas.memory import UserMemory
 
             try:
                 memory_id = str(uuid4())
-                db.upsert_user_memory(
-                    UserMemory(
-                        memory_id=memory_id,
-                        user_id=user_id,
-                        agent_id=agent_id,
-                        team_id=team_id,
-                        memory=memory,
-                        topics=topics,
-                        input=input_string,
+                # Run async method in sync context
+                try:
+                    # Event loop is running, schedule coroutine
+                    import nest_asyncio
+
+                    nest_asyncio.apply()
+                    asyncio.run(
+                        db.upsert_user_memory(
+                            UserMemory(
+                                memory_id=memory_id,
+                                user_id=user_id,
+                                agent_id=agent_id,
+                                team_id=team_id,
+                                memory=memory,
+                                topics=topics,
+                                input=input_string,
+                            )
+                        )
                     )
-                )
+                except RuntimeError:
+                    # No event loop running, safe to use asyncio.run
+                    asyncio.run(
+                        db.upsert_user_memory(
+                            UserMemory(
+                                memory_id=memory_id,
+                                user_id=user_id,
+                                agent_id=agent_id,
+                                team_id=team_id,
+                                memory=memory,
+                                topics=topics,
+                                input=input_string,
+                            )
+                        )
+                    )
                 logger.debug(f"Memory added: {memory_id}")
                 return "Memory added successfully"
             except Exception as e:
@@ -1789,13 +1896,15 @@ class MemoryManager:
                 return "Can't update memory with empty string. Use the delete memory function if available."
 
             try:
-                db.upsert_user_memory(
-                    UserMemory(
-                        memory_id=memory_id,
-                        memory=memory,
-                        topics=topics,
-                        user_id=user_id,
-                        input=input_string,
+                _run_async(
+                    db.upsert_user_memory(
+                        UserMemory(
+                            memory_id=memory_id,
+                            memory=memory,
+                            topics=topics,
+                            user_id=user_id,
+                            input=input_string,
+                        )
                     )
                 )
                 logger.debug("Memory updated")
@@ -1812,7 +1921,7 @@ class MemoryManager:
                 str: A message indicating if the memory was deleted successfully or not.
             """
             try:
-                db.delete_user_memory(memory_id=memory_id, user_id=user_id)
+                _run_async(db.delete_user_memory(memory_id=memory_id, user_id=user_id))
                 logger.debug("Memory deleted")
                 return "Memory deleted successfully"
             except Exception as e:
@@ -1825,7 +1934,7 @@ class MemoryManager:
             Returns:
                 str: A message indicating if the memory was cleared successfully or not.
             """
-            db.clear_memories()
+            _run_async(db.clear_memories())
             logger.debug("Memory cleared")
             return "Memory cleared successfully"
 
@@ -1944,9 +2053,9 @@ class MemoryManager:
             """
             try:
                 if isinstance(db, MemoryService):
-                    await db.delete_user_memory(memory_id=memory_id)
+                    await db.delete_user_memory(memory_id=memory_id, user_id=user_id)
                 else:
-                    db.delete_user_memory(memory_id=memory_id)
+                    db.delete_user_memory(memory_id=memory_id, user_id=user_id)
                 logger.debug("Memory deleted")
                 return "Memory deleted successfully"
             except Exception as e:

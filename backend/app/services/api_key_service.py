@@ -3,6 +3,7 @@ ApiKey 服务
 - 列表/创建/删除
 - 权限：personal 仅本人；workspace 需 workspace admin/owner
 """
+
 from __future__ import annotations
 
 import secrets
@@ -14,7 +15,8 @@ from app.common.exceptions import BadRequestException, ForbiddenException, NotFo
 from app.models.api_key import ApiKey
 from app.models.workspace import WorkspaceMemberRole
 from app.repositories.api_key import ApiKeyRepository
-from app.repositories.workspace import WorkspaceRepository, WorkspaceMemberRepository
+from app.repositories.workspace import WorkspaceMemberRepository, WorkspaceRepository
+
 from .base import BaseService
 
 
@@ -138,4 +140,3 @@ class ApiKeyService(BaseService[ApiKey]):
 
         await self.repo.delete_by_id(key_id)
         await self.db.commit()
-

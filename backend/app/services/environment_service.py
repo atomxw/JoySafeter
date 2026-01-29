@@ -16,7 +16,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.settings import Environment, WorkspaceEnvironment
-from app.common.exceptions import NotFoundException
 
 
 class EnvironmentService:
@@ -48,9 +47,7 @@ class EnvironmentService:
         row = result.scalar_one_or_none()
         return row.variables if row else {}
 
-    async def upsert_workspace_env(
-        self, workspace_id: uuid.UUID, variables: Dict[str, str]
-    ) -> Dict[str, str]:
+    async def upsert_workspace_env(self, workspace_id: uuid.UUID, variables: Dict[str, str]) -> Dict[str, str]:
         existing = await self.db.execute(
             select(WorkspaceEnvironment).where(WorkspaceEnvironment.workspace_id == workspace_id)
         )
@@ -63,9 +60,7 @@ class EnvironmentService:
         await self.db.commit()
         return env_row.variables
 
-    async def merge_user_workspace_env(
-        self, user_id: uuid.UUID, workspace_id: Optional[uuid.UUID]
-    ) -> Dict[str, str]:
+    async def merge_user_workspace_env(self, user_id: uuid.UUID, workspace_id: Optional[uuid.UUID]) -> Dict[str, str]:
         user_env = await self.get_user_env(user_id)
         workspace_env = {}
         if workspace_id:
@@ -77,4 +72,3 @@ class EnvironmentService:
     def mask_variables(variables: Dict[str, str]) -> Dict[str, str]:
         """仅返回键名，用于安全展示"""
         return {k: "***" for k in variables.keys()}
-

@@ -1,16 +1,18 @@
 """
 工作空间 Repository
 """
-from typing import List, Optional
+
 import uuid
+from typing import List, Optional
 
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.workspace import Workspace, WorkspaceMember, WorkspaceMemberRole
-from app.models.access_control import WorkspaceInvitation, WorkspaceInvitationStatus
 from app.common.exceptions import NotFoundException
+from app.models.access_control import WorkspaceInvitation, WorkspaceInvitationStatus
+from app.models.workspace import Workspace, WorkspaceMember, WorkspaceMemberRole
+
 from .base import BaseRepository
 
 
@@ -58,16 +60,19 @@ class WorkspaceMemberRepository(BaseRepository[WorkspaceMember]):
 
     async def count_admins(self, workspace_id: uuid.UUID) -> int:
         """统计 workspace 中 admin/owner 数量"""
-        query = select(func.count()).select_from(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.role.in_([WorkspaceMemberRole.owner, WorkspaceMemberRole.admin]),
+        query = (
+            select(func.count())
+            .select_from(WorkspaceMember)
+            .where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.role.in_([WorkspaceMemberRole.owner, WorkspaceMemberRole.admin]),
+            )
         )
         result = await self.db.execute(query)
         return int(result.scalar() or 0)
 
     async def list_by_workspace(self, workspace_id: uuid.UUID) -> List[WorkspaceMember]:
         """获取工作空间的所有成员，包含用户信息"""
-        from app.models.auth import AuthUser
         query = (
             select(WorkspaceMember)
             .where(WorkspaceMember.workspace_id == workspace_id)
@@ -76,7 +81,9 @@ class WorkspaceMemberRepository(BaseRepository[WorkspaceMember]):
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def update_member_role(self, workspace_id: uuid.UUID, user_id: str, role: WorkspaceMemberRole) -> WorkspaceMember:
+    async def update_member_role(
+        self, workspace_id: uuid.UUID, user_id: str, role: WorkspaceMemberRole
+    ) -> WorkspaceMember:
         """更新成员角色"""
         member = await self.get_member(workspace_id, user_id)
         if not member:
@@ -94,7 +101,7 @@ class WorkspaceMemberRepository(BaseRepository[WorkspaceMember]):
             )
         )
         result = await self.db.execute(stmt)
-        return (result.rowcount or 0) > 0
+        return (getattr(result, "rowcount", 0) or 0) > 0
 
 
 class WorkspaceInvitationRepository(BaseRepository[WorkspaceInvitation]):
@@ -116,17 +123,13 @@ class WorkspaceInvitationRepository(BaseRepository[WorkspaceInvitation]):
         """获取多个 workspace 的所有邀请"""
         if not workspace_ids:
             return []
-        query = select(WorkspaceInvitation).where(
-            WorkspaceInvitation.workspace_id.in_(workspace_ids)
-        )
+        query = select(WorkspaceInvitation).where(WorkspaceInvitation.workspace_id.in_(workspace_ids))
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def get_by_token(self, token: str) -> Optional[WorkspaceInvitation]:
         """根据 token 获取邀请"""
-        query = select(WorkspaceInvitation).where(
-            WorkspaceInvitation.token == token
-        )
+        query = select(WorkspaceInvitation).where(WorkspaceInvitation.token == token)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
@@ -143,10 +146,15 @@ class WorkspaceInvitationRepository(BaseRepository[WorkspaceInvitation]):
     async def list_pending_by_email(self, email: str) -> List[WorkspaceInvitation]:
         """根据邮箱获取所有待处理的邀请"""
         from datetime import datetime, timezone
-        query = select(WorkspaceInvitation).where(
-            WorkspaceInvitation.email == email.lower(),
-            WorkspaceInvitation.status == WorkspaceInvitationStatus.pending,
-            WorkspaceInvitation.expires_at > datetime.now(timezone.utc),
-        ).order_by(WorkspaceInvitation.created_at.desc())
+
+        query = (
+            select(WorkspaceInvitation)
+            .where(
+                WorkspaceInvitation.email == email.lower(),
+                WorkspaceInvitation.status == WorkspaceInvitationStatus.pending,
+                WorkspaceInvitation.expires_at > datetime.now(timezone.utc),
+            )
+            .order_by(WorkspaceInvitation.created_at.desc())
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())

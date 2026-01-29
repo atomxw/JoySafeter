@@ -9,15 +9,14 @@ Create Date: 2026-01-22 00:00:03.000000+00:00
 - 添加 topics 列（JSON，nullable）
 如果列已存在则跳过
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '000000000003'
-down_revision: Union[str, None] = '000000000002'
+revision: str = "000000000003"
+down_revision: Union[str, None] = "000000000002"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -30,7 +29,7 @@ def upgrade() -> None:
         BEGIN
             -- 检查并添加 memory 列
             IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
+                SELECT 1 FROM information_schema.columns
                 WHERE table_name = 'memories' AND column_name = 'memory'
             ) THEN
                 -- 如果表中有数据，先添加为可空列，然后设置默认值
@@ -40,10 +39,10 @@ def upgrade() -> None:
                 -- 设置为 NOT NULL
                 ALTER TABLE memories ALTER COLUMN memory SET NOT NULL;
             END IF;
-            
+
             -- 检查并添加 topics 列
             IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
+                SELECT 1 FROM information_schema.columns
                 WHERE table_name = 'memories' AND column_name = 'topics'
             ) THEN
                 ALTER TABLE memories ADD COLUMN topics JSON;
@@ -59,15 +58,15 @@ def downgrade() -> None:
         BEGIN
             -- 移除 topics 列（如果存在）
             IF EXISTS (
-                SELECT 1 FROM information_schema.columns 
+                SELECT 1 FROM information_schema.columns
                 WHERE table_name = 'memories' AND column_name = 'topics'
             ) THEN
                 ALTER TABLE memories DROP COLUMN topics;
             END IF;
-            
+
             -- 移除 memory 列（如果存在）
             IF EXISTS (
-                SELECT 1 FROM information_schema.columns 
+                SELECT 1 FROM information_schema.columns
                 WHERE table_name = 'memories' AND column_name = 'memory'
             ) THEN
                 ALTER TABLE memories DROP COLUMN memory;

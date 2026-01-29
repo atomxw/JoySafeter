@@ -1,21 +1,22 @@
-from typing import Any, Dict
 import logging
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
 
 logger = logging.getLogger(__name__)
 
+
 class LibcDatabaseHandler(AbstractHandler):
     """Handler for libc_database functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
+        """Handler related commands"""
         return []
-    
+
     def handle(self, data: Dict) -> Any:
         """Execute libc_database with enhanced logging"""
         try:
@@ -29,7 +30,9 @@ class LibcDatabaseHandler(AbstractHandler):
             if action in ["dump", "download"] and not libc_id:
                 logger.warning("🔧 libc-database called without libc_id for dump/download")
                 return {"error": "libc_id parameter is required for dump/download actions"}
-            base_command = "cd /opt/libc-database 2>/dev/null || cd ~/libc-database 2>/dev/null || echo 'libc-database not found'"
+            base_command = (
+                "cd /opt/libc-database 2>/dev/null || cd ~/libc-database 2>/dev/null || echo 'libc-database not found'"
+            )
             if action == "find":
                 command = f"{base_command} && ./find {symbols}"
             elif action == "dump":

@@ -1,13 +1,16 @@
 """
 ModelCredential Repository
 """
+
 import uuid
 from typing import Optional
-from sqlalchemy import select, and_
+
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.model_credential import ModelCredential
+
 from .base import BaseRepository
 
 
@@ -26,15 +29,13 @@ class ModelCredentialRepository(BaseRepository[ModelCredential]):
         conditions = []
         if provider_id:
             conditions.append(ModelCredential.provider_id == provider_id)
-        
+
         if conditions:
-            result = await self.db.execute(
-                select(ModelCredential).where(and_(*conditions))
-            )
+            result = await self.db.execute(select(ModelCredential).where(and_(*conditions)))
         else:
             result = await self.db.execute(select(ModelCredential))
         return result.scalar_one_or_none()
-    
+
     async def get_by_provider(
         self,
         provider_id: uuid.UUID,
@@ -57,17 +58,10 @@ class ModelCredentialRepository(BaseRepository[ModelCredential]):
     ) -> list[ModelCredential]:
         """获取所有凭据（所有用户和工作空间可见）"""
         # 移除所有 user_id 和 workspace_id 过滤
-        result = await self.db.execute(
-            select(ModelCredential)
-            .options(selectinload(ModelCredential.provider))
-        )
-        return list(result.scalars().all())
-    
-    async def list_all(self) -> list[ModelCredential]:
-        """获取所有凭据（所有用户和工作空间可见）"""
-        result = await self.db.execute(
-            select(ModelCredential)
-            .options(selectinload(ModelCredential.provider))
-        )
+        result = await self.db.execute(select(ModelCredential).options(selectinload(ModelCredential.provider)))
         return list(result.scalars().all())
 
+    async def list_all(self) -> list[ModelCredential]:
+        """获取所有凭据（所有用户和工作空间可见）"""
+        result = await self.db.execute(select(ModelCredential).options(selectinload(ModelCredential.provider)))
+        return list(result.scalars().all())

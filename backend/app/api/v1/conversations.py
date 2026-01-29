@@ -48,13 +48,12 @@ from loguru import logger
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.pagination import PageResult, PaginationParams, Paginator
-from app.core.database import get_db
 from app.common.dependencies import CurrentUser
 from app.common.exceptions import raise_internal_error, raise_not_found_error
+from app.common.pagination import PageResult, PaginationParams, Paginator
 from app.core.agent.checkpointer.checkpointer import get_checkpointer
 from app.core.agent.sample_agent import get_agent
-from app.core.settings import settings
+from app.core.database import get_db
 from app.models import Conversation, Message
 from app.schemas import (
     BaseResponse,
@@ -63,9 +62,9 @@ from app.schemas import (
     ConversationDetailResponse,
     ConversationExportResponse,
     ConversationImportRequest,
+    ConversationMessageResponse,
     ConversationResponse,
     ConversationUpdate,
-    ConversationMessageResponse,
     SearchRequest,
     SearchResponse,
     UserStatsResponse,
@@ -77,6 +76,7 @@ router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
 # ==================== Helper functions ====================
 
+
 async def get_compiled_graph(user_id: str, db: AsyncSession) -> Any:
     """
     Get a LangGraph runnable with checkpointer enabled.
@@ -86,22 +86,21 @@ async def get_compiled_graph(user_id: str, db: AsyncSession) -> Any:
         - Lazily initializes the checkpointer from settings if not initialized.
         - Credentials are fetched from database.
     """
-    from app.services.model_credential_service import ModelCredentialService
-    from app.services.model_service import ModelService
-    
     # 从数据库获取凭据
     from app.core.model import ModelType
-    
+    from app.services.model_credential_service import ModelCredentialService
+    from app.services.model_service import ModelService
+
     model_service = ModelService(db)
     credential_service = ModelCredentialService(db)
-    
+
     # 获取默认模型
     default_instance = await model_service.repo.get_default()
     if default_instance:
         provider_name = default_instance.provider.name
         model_name = default_instance.model_name
         model_type = ModelType.CHAT  # 简化处理，假设是 Chat 模型
-        
+
         credentials = await credential_service.get_current_credentials(
             provider_name=provider_name,
             model_type=model_type,
@@ -114,7 +113,8 @@ async def get_compiled_graph(user_id: str, db: AsyncSession) -> Any:
         all_credentials = await credential_service.list_credentials()
         for cred in all_credentials:
             if cred.get("is_valid"):
-                provider_name = cred.get("provider_name")
+                provider_name_raw = cred.get("provider_name")
+                provider_name = str(provider_name_raw) if provider_name_raw is not None else ""
                 # 尝试获取该 provider 的第一个模型
                 provider = await model_service.provider_repo.get_by_name(provider_name)
                 if provider:
@@ -133,7 +133,7 @@ async def get_compiled_graph(user_id: str, db: AsyncSession) -> Any:
                             api_key = credentials.get("api_key")
                             base_url = credentials.get("base_url")
                             break
-    
+
     return await get_agent(
         checkpointer=get_checkpointer(),
         api_key=api_key,
@@ -241,7 +241,7 @@ async def list_conversations(
     """
     # Create PaginationParams from query parameters
     page_query = PaginationParams(page=page, page_size=page_size)
-    
+
     paginator = Paginator(db)
     page_result = await paginator.paginate(
         select(Conversation)
@@ -592,6 +592,7 @@ async def reset_conversation(
         await db.rollback()
         logger.error(f"❌ Failed to reset conversation {thread_id}: {e}")
         raise_internal_error(f"Failed to reset conversation: {str(e)}")
+        return BaseResponse(success=False, code=500, msg=f"Failed to reset conversation: {str(e)}", data={})  # type: ignore[unreachable]
 
 
 # ==================== Message management endpoints ====================
@@ -722,7 +723,9 @@ async def get_checkpoints(
     except Exception as e:
         logger.error(f"Get checkpoints error: {e}")
         raise_internal_error(str(e))
-
+        return BaseResponse(
+            success=False, code=500, msg=str(e), data=CheckpointResponse(thread_id=thread_id, checkpoints=[])
+        )  # type: ignore[unreachable]
 
 
 async def get_graph_instance(
@@ -756,14 +759,14 @@ async def get_graph_instance(
     # 如果没有提供凭据，从数据库获取
     if not api_key and db:
         from app.core.model.utils.credential_resolver import LLMCredentialResolver
-        
+
         fetched_api_key, fetched_base_url, fetched_model_name = await LLMCredentialResolver.get_credentials(
             db=db,
             api_key=api_key,
             base_url=base_url,
             llm_model=llm_model,
         )
-        
+
         # Update values if fetched from database
         if fetched_api_key:
             api_key = fetched_api_key
@@ -771,7 +774,7 @@ async def get_graph_instance(
             base_url = fetched_base_url
         if fetched_model_name:
             llm_model = fetched_model_name
-    
+
     graph = await get_agent(
         checkpointer=get_checkpointer(),
         llm_model=llm_model,

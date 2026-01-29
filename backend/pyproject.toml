@@ -1,11 +1,11 @@
 [project]
 name = "joysafeter"
 version = "0.1.0"
-description = "AutoSec Agent Platform Backend - 智能体平台后端服务"
+description = "JoySafeter Backend - 智能体平台后端服务"
 requires-python = ">=3.12,<3.14"
 license = {text = "Apache-2.0"}
 authors = [
-    {name = "AutoSec Team", email = "team@joysafeter.com"}
+    {name = "JoySafeter Team", email = "team@joysafeter.com"}
 ]
 keywords = ["agent", "langchain", "langgraph", "ai", "platform"]
 
@@ -85,6 +85,7 @@ dev = [
     "mypy>=1.13.0",
     "pre-commit>=4.0.0",
     "httpx>=0.27.0",
+    "types-PyYAML>=6.0.0",
 ]
 
 [build-system]
@@ -99,6 +100,8 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "types-PyYAML>=6.0.0",
 ]
 
 [tool.ruff]

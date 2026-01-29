@@ -4,6 +4,7 @@ API Key 管理
 - POST /api/v1/api-keys           创建（personal 或 workspace admin+）
 - DELETE /api/v1/api-keys/{id}    删除（personal 仅本人，workspace admin+）
 """
+
 from __future__ import annotations
 
 import uuid
@@ -14,10 +15,9 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.dependencies import get_current_user, require_workspace_role
-from app.models.auth import AuthUser as User
-from app.models.workspace import WorkspaceMemberRole
+from app.common.dependencies import get_current_user
 from app.core.database import get_db
+from app.models.auth import AuthUser as User
 from app.services.api_key_service import ApiKeyService
 
 router = APIRouter(prefix="/api-keys", tags=["ApiKeys"])
@@ -37,9 +37,9 @@ async def list_api_keys(
     current_user: User = Depends(get_current_user),
 ):
     # 注意：workspace_id 可能为 None（personal API key）
-    
+
     service = ApiKeyService(db)
-    data = await service.list_keys(current_user_id=current_user.id, workspace_id=workspace_id)
+    data = await service.list_keys(current_user_id=uuid.UUID(current_user.id), workspace_id=workspace_id)
     return {"success": True, "data": data}
 
 
@@ -51,11 +51,11 @@ async def create_api_key(
 ):
     # 注意：workspace_id 可能为 None（personal API key）
     workspace_id = payload.workspaceId if payload.type == "workspace" else None
-    
+
     service = ApiKeyService(db)
     # workspace 类型的权限在 service 内校验（admin+）；personal 仅本人
     data = await service.create_key(
-        current_user_id=current_user.id,
+        current_user_id=uuid.UUID(current_user.id),
         name=payload.name,
         type=payload.type,
         workspace_id=workspace_id,
@@ -71,6 +71,5 @@ async def delete_api_key(
     current_user: User = Depends(get_current_user),
 ):
     service = ApiKeyService(db)
-    await service.delete_key(key_id=key_id, current_user_id=current_user.id)
+    await service.delete_key(key_id=key_id, current_user_id=uuid.UUID(current_user.id))
     return {"success": True}
-

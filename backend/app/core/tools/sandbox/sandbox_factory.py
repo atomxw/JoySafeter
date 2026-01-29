@@ -9,7 +9,6 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from deepagents.backends.protocol import SandboxBackendProtocol
-
 from loguru import logger
 
 
@@ -66,7 +65,6 @@ def create_modal_sandbox(
         RuntimeError: Setup script failed
     """
     import modal
-
     from modal import ModalBackend
 
     logger.info("[yellow]Starting Modal sandbox...[/yellow]")
@@ -76,7 +74,7 @@ def create_modal_sandbox(
 
     with app.run():
         if sandbox_id:
-            sandbox = modal.Sandbox.from_id(sandbox_id=sandbox_id, app=app)
+            sandbox = modal.Sandbox.from_id(sandbox_id=sandbox_id)  # type: ignore[call-arg]
             should_cleanup = False
         else:
             sandbox = modal.Sandbox.create(app=app, workdir="/workspace")
@@ -140,9 +138,8 @@ def create_runloop_sandbox(
         FileNotFoundError: Setup script not found
         RuntimeError: Setup script failed
     """
-    from runloop_api_client import Runloop
-
     from runloop import RunloopBackend
+    from runloop_api_client import Runloop
 
     bearer_token = os.environ.get("RUNLOOP_API_KEY")
     if not bearer_token:
@@ -190,6 +187,7 @@ def create_runloop_sandbox(
                 logger.info(f"[dim]✓ Runloop devbox {sandbox_id} terminated[/dim]")
             except Exception as e:
                 logger.info(f"[yellow]⚠ Cleanup failed: {e}[/yellow]")
+
 
 '''
 @contextmanager
@@ -269,7 +267,7 @@ def create_daytona_sandbox(
 _PROVIDER_TO_WORKING_DIR = {
     "modal": "/workspace",
     "runloop": "/home/user",
-# "daytona": "/home/daytona",
+    # "daytona": "/home/daytona",
 }
 
 
@@ -277,7 +275,7 @@ _PROVIDER_TO_WORKING_DIR = {
 _SANDBOX_PROVIDERS = {
     "modal": create_modal_sandbox,
     "runloop": create_runloop_sandbox,
-#    "daytona": create_daytona_sandbox,
+    #    "daytona": create_daytona_sandbox,
 }
 
 
@@ -302,10 +300,7 @@ def create_sandbox(
         (SandboxBackend, sandbox_id)
     """
     if provider not in _SANDBOX_PROVIDERS:
-        msg = (
-            f"Unknown sandbox provider: {provider}. "
-            f"Available providers: {', '.join(get_available_sandbox_types())}"
-        )
+        msg = f"Unknown sandbox provider: {provider}. Available providers: {', '.join(get_available_sandbox_types())}"
         raise ValueError(msg)
 
     sandbox_provider = _SANDBOX_PROVIDERS[provider]

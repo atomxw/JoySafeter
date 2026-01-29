@@ -12,23 +12,23 @@ Async operations for Memory table:
 Designed to be SQLite-compatible (uses generic casts/LIKE for search).
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union
 import json
-
+import time
 from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional, Tuple, Union
+from uuid import uuid4
+
 import sqlalchemy as sa
-from sqlalchemy import String, select, func, cast, text
-from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
+from sqlalchemy import String, cast, func, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal, engine
 from app.models.memory import Memory
 from app.schemas.memory import UserMemory
-from uuid import uuid4
-import time
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.exc import IntegrityError
 
 
 def log_debug(msg: str) -> None:
@@ -75,7 +75,8 @@ class MemoryService:
         # Currently only supports the 'memories' table
         if table_type != "memories":
             raise ValueError(f"Unsupported table_type: {table_type}")
-        return Memory.__table__
+        table: sa.Table = Memory.__table__  # type: ignore[assignment]
+        return table
 
     def async_session_factory(self) -> AsyncSession:
         # Return an AsyncSession instance for 'async with' usage
@@ -172,10 +173,10 @@ class MemoryService:
             # SQLite-compatible approach: fetch topics column and flatten in Python
             async with self._session() as sess:
                 stmt = select(table.c.topics).where(table.c.topics.is_not(None))
-                
+
                 # Always filter by user_id for security (prevent data leakage)
                 stmt = stmt.where(table.c.user_id == user_id)
-                
+
                 result = await sess.execute(stmt)
                 records = result.fetchall()
 
@@ -292,9 +293,7 @@ class MemoryService:
                             # Replace single quotes with escaped single quotes for SQL
                             topic_array_json_escaped = topic_array_json.replace("'", "''")
                             # Use text() with string formatting (safe for JSON strings from json.dumps)
-                            stmt = stmt.where(
-                                text(f"topics::jsonb @> '{topic_array_json_escaped}'::jsonb")
-                            )
+                            stmt = stmt.where(text(f"topics::jsonb @> '{topic_array_json_escaped}'::jsonb"))
                     else:
                         # SQLite or other: Use LIKE for compatibility
                         for topic in topics:
@@ -375,7 +374,7 @@ class MemoryService:
                 dialect = engine.dialect.name
 
                 if dialect == "postgresql":
-                    stmt = pg_insert(table).values(**values)
+                    stmt: Any = pg_insert(table).values(**values)
                     stmt = stmt.on_conflict_do_update(
                         index_elements=["memory_id"],
                         set_=dict(
@@ -394,8 +393,8 @@ class MemoryService:
                     row = result.fetchone()
 
                 elif dialect == "sqlite":
-                    stmt = sqlite_insert(table).values(**values)
-                    stmt = stmt.on_conflict_do_update(
+                    stmt = sqlite_insert(table).values(**values)  # type: ignore[assignment]
+                    stmt = stmt.on_conflict_do_update(  # type: ignore[assignment]
                         index_elements=["memory_id"],
                         set_=dict(
                             memory=memory.memory,
@@ -511,9 +510,9 @@ class MemoryService:
                         for col in table.columns
                         if col.name not in ["memory_id", "created_at"]  # Don't update primary key or created_at
                     }
-                    stmt = insert_stmt.on_conflict_do_update(index_elements=["memory_id"], set_=update_columns).returning(
-                        table
-                    )
+                    stmt = insert_stmt.on_conflict_do_update(
+                        index_elements=["memory_id"], set_=update_columns
+                    ).returning(table)
 
                     result = await sess.execute(stmt, memory_records)
                     rows = result.fetchall()

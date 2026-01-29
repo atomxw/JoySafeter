@@ -9,8 +9,9 @@ try:
 except ImportError:
     raise ImportError("`psycopg` not installed. Please install using `pip install 'psycopg[binary]'`.")
 
-from app.core.tools.toolkit import Toolkit
 from loguru import logger
+
+from app.core.tools.toolkit import Toolkit
 
 
 class PostgresTools(Toolkit):
@@ -110,6 +111,8 @@ class PostgresTools(Toolkit):
         """
         if not self.is_connected:
             return self.connect()
+        if self._connection is None:
+            raise RuntimeError("Connection is None")
         return self._connection
 
     def __enter__(self):

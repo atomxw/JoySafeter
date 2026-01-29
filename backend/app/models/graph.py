@@ -1,20 +1,19 @@
 """
 Graph 相关模型
 """
+
 import uuid
-from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import (
     Boolean,
+    DateTime,
     ForeignKey,
     Index,
     Numeric,
     String,
     Text,
-    UniqueConstraint,
-    DateTime,
-    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -23,6 +22,7 @@ from .base import BaseModel
 
 if TYPE_CHECKING:
     from .auth import AuthUser
+    from .graph_deployment_version import GraphDeploymentVersion
     from .workspace import Workspace, WorkspaceFolder
 
 
@@ -32,6 +32,7 @@ def utc_now():
 
 class AgentGraph(BaseModel):
     """Agent 图模型"""
+
     __tablename__ = "graphs"
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -106,6 +107,7 @@ class AgentGraph(BaseModel):
 
 class GraphNode(BaseModel):
     """图节点模型"""
+
     __tablename__ = "graph_nodes"
 
     graph_id: Mapped[uuid.UUID] = mapped_column(
@@ -148,7 +150,7 @@ class GraphNode(BaseModel):
 
 class GraphEdge(BaseModel):
     """图边模型
-    
+
     支持条件路由和复杂流程模式：
     - data.route_key: 路由键，用于条件路由（对应 RouterNodeExecutor 的返回值）
     - data.source_handle_id: React Flow 的 Handle ID（如 "Yes", "No", "Unknown"）
@@ -156,6 +158,7 @@ class GraphEdge(BaseModel):
     - data.edge_type: 边类型（"normal" | "conditional" | "loop_back"），用于区分不同类型的边
     - data.label: 边的显示标签（可选），用于日志和调试
     """
+
     __tablename__ = "graph_edges"
 
     graph_id: Mapped[uuid.UUID] = mapped_column(
@@ -199,4 +202,3 @@ class GraphEdge(BaseModel):
         Index("graph_edges_graph_source_idx", "graph_id", "source_node_id"),
         Index("graph_edges_graph_target_idx", "graph_id", "target_node_id"),
     )
-

@@ -1,21 +1,22 @@
-from typing import Any, Dict
 import logging
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.runtime.command.command_executor import execute_command
 
 logger = logging.getLogger(__name__)
 
+
 class DalfoxHandler(AbstractHandler):
     """Handler for dalfox functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
 
     def commands(self) -> list:
-        '''Handler related commands'''
-        return ['dalfox']
-    
+        """Handler related commands"""
+        return ["dalfox"]
+
     def handle(self, data: Dict) -> Any:
         """Execute dalfox with enhanced logging"""
         try:
@@ -45,7 +46,7 @@ class DalfoxHandler(AbstractHandler):
                 command += f" {additional_args}"
             logger.info(f"🎯 Starting Dalfox XSS scan: {url if url else 'pipe mode'}")
             result = execute_command(command)
-            logger.info(f"📊 Dalfox XSS scan completed")
+            logger.info("📊 Dalfox XSS scan completed")
             return result
         except Exception as e:
             logger.error(f"💥 Error in dalfox endpoint: {str(e)}")

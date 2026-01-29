@@ -11,22 +11,23 @@ Key Features:
 - ReAct-style reasoning and execution
 - Support for multi-step tool workflows
 """
+
 import json
 import logging
 import os
 from operator import add
-
-logger = logging.getLogger(__name__)
-from typing import TypedDict, List, Dict, Any, Optional, Annotated
+from typing import Annotated, Any, Dict, List, Optional, TypedDict
 
 from langchain.agents import create_agent
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
 
-from app.dynamic_agent.observability.langfuse import callbacks
+from app.common.constants import COMMAND_TOOL, KNOWLEDGE_TOOL
 from app.dynamic_agent.infra.metadata_context import MetadataContext
-from app.common.constants import KNOWLEDGE_TOOL, COMMAND_TOOL
+from app.dynamic_agent.observability.langfuse import callbacks
 from app.dynamic_agent.prompts.registry import get_registry
+
+logger = logging.getLogger(__name__)
 
 
 class AgentState(TypedDict):
@@ -45,6 +46,7 @@ class AgentState(TypedDict):
         iteration_count: Number of iterations performed
         error: Error message if any step fails
     """
+
     # Input and output
     input: str
     final_output: Optional[str]
@@ -91,11 +93,11 @@ def create_initial_state(user_input: str) -> AgentState:
 class DynamicToolSelectionAgent:
     """
     Agent that dynamically selects and uses tools based on user goals.
-    
+
     This agent follows a two-phase approach:
     1. Tool Discovery: Uses helper tools to discover available categories and tools
     2. Task Execution: Uses selected tools to accomplish the user's goal
-    
+
     The agent uses LangGraph's prebuilt ReAct agent for reasoning and tool execution.
     """
 
@@ -144,17 +146,18 @@ class DynamicToolSelectionAgent:
             )
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).warning(f"Failed to load tool_selection prompt: {e}")
             return "You are an intelligent cybersecurity assistant."
 
     SYSTEM_PROMPT = None  # Will be set in __init__
 
     def __init__(
-            self,
-            llm: Optional[BaseChatModel],
-            tools: List[BaseTool] = None,
-            max_iterations: int = 15,
-            verbose: bool = True,
+        self,
+        llm: Optional[BaseChatModel],
+        tools: Optional[List[BaseTool]] = None,
+        max_iterations: int = 15,
+        verbose: bool = True,
     ):
         """
         Initialize the dynamic tool selection agent.
@@ -164,7 +167,7 @@ class DynamicToolSelectionAgent:
         :param verbose:
         """
         """
-        
+
         Args:
             llm: Language model to use (defaults to GPT-4)
             max_iterations: Maximum number of agent iterations
@@ -182,22 +185,27 @@ class DynamicToolSelectionAgent:
         system_prompt = self._get_system_prompt()
 
         # Create the ReAct agent with discovery tools
-        self.agent = create_agent(
+        # create_agent expects model to be non-None, but we allow Optional
+        if self.llm is None:
+            raise ValueError("LLM model is required for DynamicToolSelectionAgent")
+
+        from typing import Any as AnyType
+
+        self.agent: AnyType = create_agent(
             model=self.llm,
-            tools=self.discovery_tools,
+            tools=self.discovery_tools or [],
             system_prompt=system_prompt,
             debug=verbose,
         )
         self.agent.bind(llm={"parallel_tool_calls": False})
 
-
-    def run(self, messages: List[Dict[str,str]], metadata: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, messages: List[Dict[str, str]], metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
         Run the agent with user input.
-        
+
         Args:
             user_input: User's goal description or direct input
-            
+
         Returns:
             Dictionary containing:
             - output: Final response
@@ -214,23 +222,23 @@ class DynamicToolSelectionAgent:
         # state = create_initial_state(user_input)
 
         # Prepare input for the agent
-        inputs = {
-            "messages": messages
-        }
+        inputs = {"messages": messages}
 
         # Run the agent
         try:
-            metadata = MetadataContext.get()
-            result = self.agent.ainvoke(inputs, config={
-                "callbacks": metadata['callbacks'],
-                "metadata": {k: v for k, v in metadata.items() if k != 'callbacks'},
-                "recursion_limit": int(os.getenv("AGENT_MAX_INTERACTIVE_STEPS", 64))
-
-            })
+            metadata = MetadataContext.get() or {}
+            result = self.agent.ainvoke(
+                inputs,
+                config={
+                    "callbacks": metadata.get("callbacks", []),
+                    "metadata": {k: v for k, v in metadata.items() if k != "callbacks"},
+                    "recursion_limit": int(os.getenv("AGENT_MAX_INTERACTIVE_STEPS", 64)),
+                },
+            )
 
             if self.verbose:
                 print(f"\n{'=' * 70}")
-                print(f"Agent Execution Complete")
+                print("Agent Execution Complete")
                 print(f"{'=' * 70}\n")
 
             # Extract the final message
@@ -238,14 +246,22 @@ class DynamicToolSelectionAgent:
             final_message = messages[-1] if messages else None
 
             try:
-                if not final_message.content:
+                # Check if final_message has content attribute
+                if final_message is None or not hasattr(final_message, "content"):
                     return {
                         "output": [],
                         "success": False,
-                        "error": 'No output generated',
+                        "error": "No output generated",
+                    }
+                content = getattr(final_message, "content", None)
+                if not content:
+                    return {
+                        "output": [],
+                        "success": False,
+                        "error": "No output generated",
                     }
                 else:
-                    output = json.loads(final_message.content)
+                    output = json.loads(content)
                     return {
                         "output": output,
                         "success": True,
@@ -268,13 +284,13 @@ class DynamicToolSelectionAgent:
                 "error": f"Error: {str(e)}",
             }
 
-    async def arun(self, messages: List[Dict[str,str]], metadata: Dict[str, Any]) -> Dict[str, Any]:
+    async def arun(self, messages: List[Dict[str, str]], metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
         Async version of run().
-        
+
         Args:
             user_input: User's goal description or direct input
-            
+
         Returns:
             Dictionary containing execution results
         """
@@ -285,29 +301,34 @@ class DynamicToolSelectionAgent:
         #     print(f"User Input: {user_input}\n")
 
         # Prepare input for the agent
-        inputs = {
-            "messages": messages
-        }
+        inputs = {"messages": messages}
 
         # Run the agent asynchronously
         try:
-            result = await self.agent.ainvoke(inputs,
-                                              config={
-                                                  "callbacks":callbacks(),
-                                                  "metadata": metadata,
-                                                  "recursion_limit": int(os.getenv("AGENT_MAX_INTERACTIVE_STEPS", 64))
-                                              })
+            result = await self.agent.ainvoke(
+                inputs,
+                config={
+                    "callbacks": callbacks(),
+                    "metadata": metadata,
+                    "recursion_limit": int(os.getenv("AGENT_MAX_INTERACTIVE_STEPS", 64)),
+                },
+            )
 
             if self.verbose:
                 print(f"\n{'=' * 70}")
-                print(f"Agent Execution Complete")
+                print("Agent Execution Complete")
                 print(f"{'=' * 70}\n")
 
             # Extract the final message
             messages = result.get("messages", [])
             final_message = messages[-1] if messages else None
+            # Check if final_message has content attribute
+            if final_message is not None and hasattr(final_message, "content"):
+                content = getattr(final_message, "content", "No output generated")
+            else:
+                content = "No output generated"
             return {
-                "output": final_message.content if final_message else "No output generated",
+                "output": content,
                 "messages": messages,
                 "success": True,
             }
@@ -325,17 +346,17 @@ class DynamicToolSelectionAgent:
 
 
 def create_select_agent(
-        llm: Optional[BaseChatModel],
-        tools: List[BaseTool],
-        verbose: bool = True,
+    llm: Optional[BaseChatModel],
+    tools: List[BaseTool],
+    verbose: bool = True,
 ) -> DynamicToolSelectionAgent:
     """
     Factory function to create a dynamic tool selection agent.
-    
+
     Args:
         llm: Language model to use (defaults to GPT-4)
         verbose: Whether to print verbose output
-        
+
     Returns:
         Configured DynamicToolSelectionAgent instance
     """

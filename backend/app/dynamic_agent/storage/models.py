@@ -7,7 +7,7 @@ including Task, ExecutionStep, and related schemas.
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -74,9 +74,11 @@ class ExecutionStepResponse(ExecutionStepBase):
 
     id: UUID
     task_id: UUID
+    parent_step_id: Optional[UUID] = None  # Parent step ID for step hierarchy
     start_time: datetime
     end_time: Optional[datetime] = None
     created_at: datetime
+    children: List["ExecutionStepResponse"] = Field(default_factory=list)  # Nested children for tree structure
 
     class Config:
         """Pydantic config."""

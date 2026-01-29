@@ -3,12 +3,13 @@ Custom Tool CRUD API (User-level)
 - 读写：基于用户所有权
 - 用户级配额限制（默认 100）
 """
+
 from __future__ import annotations
 
 import uuid
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +27,7 @@ class CustomToolCreate(BaseModel):
     json_schema: Dict[str, Any] = Field(default_factory=dict, alias="schema")
     runtime: str = Field(default="python", max_length=50)
     enabled: bool = True
-    
+
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -36,7 +37,7 @@ class CustomToolUpdate(BaseModel):
     json_schema: Optional[Dict[str, Any]] = Field(None, alias="schema")
     runtime: Optional[str] = Field(None, max_length=50)
     enabled: Optional[bool] = None
-    
+
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -131,4 +132,3 @@ async def delete_custom_tool(
     service = CustomToolService(db)
     await service.delete_tool(tool_id, current_user.id)
     return {"success": True}
-

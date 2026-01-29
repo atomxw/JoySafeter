@@ -3,7 +3,7 @@ Chat / Copilot Chat / Workflow Checkpoints 模型
 """
 
 import uuid
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -44,9 +44,7 @@ class Chat(BaseModel):
 
     user: Mapped["AuthUser"] = relationship("AuthUser", lazy="selectin")
 
-    __table_args__ = (
-        UniqueConstraint("identifier", name="identifier_idx"),
-    )
+    __table_args__ = (UniqueConstraint("identifier", name="identifier_idx"),)
 
 
 class CopilotChat(BaseModel):

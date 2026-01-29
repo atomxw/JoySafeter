@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Dict, Any
+from typing import Any, Dict
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.utils.process_manager import ProcessManager
@@ -16,7 +16,7 @@ class GetProcessInfoHandler(AbstractHandler):
 
     def handle(self, data: Dict) -> Any:
         try:
-            pid = data.get('pid')
+            pid = data.get("pid")
             process_info = ProcessManager.get_process_status(pid)
             if process_info:
                 runtime = time.time() - process_info["start_time"]
@@ -26,16 +26,9 @@ class GetProcessInfoHandler(AbstractHandler):
                     process_info["eta_formatted"] = f"{eta:.1f}s"
                 else:
                     process_info["eta_formatted"] = "Unknown"
-                return {
-                    "success": True,
-                    "process": process_info
-                }
+                return {"success": True, "process": process_info}
             else:
-                return {
-                    "success": False,
-                    "error": f"Process {pid} not found"
-                }
+                return {"success": False, "error": f"Process {pid} not found"}
         except Exception as e:
             logger.error(f"💥 Error getting process status: {str(e)}")
             return {"error": f"Server error: {str(e)}"}
-

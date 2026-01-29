@@ -1,6 +1,6 @@
+import logging
 import time
 from typing import Any, Dict
-import logging
 
 from dynamic_engine.mcp.handler import AbstractHandler, HandlerType
 from dynamic_engine.utils.cache import cache
@@ -12,26 +12,23 @@ logger = logging.getLogger(__name__)
 
 class HealthCheckHandler(AbstractHandler):
     """Handler for health_check functionality"""
-    
+
     def type(self) -> HandlerType:
         return HandlerType.PYTHON
-    
+
     def handle(self, data: Dict) -> Any:
         """Execute health_check with enhanced logging"""
-        essential_tools = [
-            "nmap", "gobuster", "dirb", "nikto", "sqlmap", "hydra", "john", "hashcat"
-        ]
+        essential_tools = ["nmap", "gobuster", "dirb", "nikto", "sqlmap", "hydra", "john", "hashcat"]
         all_tools = essential_tools  # simplified version
         tools_status = {}
         for tool in all_tools:
             try:
                 result = execute_command(f"which {tool}", use_cache=True)
                 tools_status[tool] = result["success"]
-            except:
+            except Exception:
                 tools_status[tool] = False
         all_essential_tools_available = all(tools_status[tool] for tool in essential_tools)
         return {
-    
             "status": "healthy",
             "message": "HexStrike AI Tools API Server is operational",
             "version": "6.0.0",
@@ -41,6 +38,5 @@ class HealthCheckHandler(AbstractHandler):
             "total_tools_count": len(all_tools),
             "cache_stats": cache.get_stats(),
             "telemetry": telemetry.get_stats(),
-            "uptime": time.time() - telemetry.stats["start_time"]
-        
+            "uptime": time.time() - telemetry.stats["start_time"],
         }

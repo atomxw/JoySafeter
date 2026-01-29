@@ -6,31 +6,30 @@ including detailed step information and filtering capabilities.
 Uses raw SQL DAO implementation via asyncpg.
 """
 
-import logging
-from typing import Optional, Dict, Any
+from typing import Dict, List, Optional
 from uuid import UUID
-from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
 import asyncpg
-
-from app.dynamic_agent.storage import get_storage_manager
-from app.dynamic_agent.storage.persistence.daos.task_dao import TaskDAO
-
+from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
+
+from app.dynamic_agent.storage.models import ExecutionStepResponse
+from app.dynamic_agent.storage.persistence.daos.task_dao import TaskDAO
 
 router = APIRouter(prefix="/history", tags=["history"])
 
 
 async def get_db_pool() -> asyncpg.Pool:
     from app.dynamic_agent.main import init_storage
+
     try:
         # storage = get_storage_manager()
         storage = await init_storage()
-        return storage.backend.pool
+        return storage.backend.pool  # type: ignore[no-any-return]
     except RuntimeError:
         # Storage not initialized yet
         raise HTTPException(status_code=500, detail="Storage manager not initialized")
+
 
 @router.get("/tasks/{task_id}/steps/{step_id}")
 async def get_step_details(
@@ -65,14 +64,10 @@ async def list_tasks_with_filters(
     """List tasks with filtering and pagination."""
     try:
         dao = TaskDAO(pool)
-        
+
         if session_id:
             # Use DAO method
-            tasks, total = await dao.get_tasks_by_session(
-                session_id=session_id,
-                limit=limit,
-                offset=offset
-            )
+            tasks, total = await dao.get_tasks_by_session(session_id=session_id, limit=limit, offset=offset)
         else:
             # Need to implement get_all_tasks or similar in DAO if needed.
             # For now, return empty if no session_id provided, as per original intent likely.
@@ -110,10 +105,7 @@ async def search_steps(
         steps = await dao.get_all_steps_for_task(task_id)
 
         # Filter by query
-        results = [
-            s for s in steps
-            if query.lower() in s.name.lower()
-        ]
+        results = [s for s in steps if query.lower() in s.name.lower()]
 
         # Filter by step_type
         if step_type:
@@ -162,16 +154,17 @@ async def get_task_statistics(
 
         # Calculate depth (need to reconstruct tree to calculate max depth)
         step_map = {s.id: s for s in steps}
-        children_map = {s.id: [] for s in steps}
+        children_map: Dict[UUID, List[ExecutionStepResponse]] = {s.id: [] for s in steps}
         roots = []
-        
+
         for s in steps:
             if s.parent_step_id and s.parent_step_id in step_map:
                 children_map[s.parent_step_id].append(s)
             else:
                 roots.append(s)
-                
+
         max_depth = 0
+
         def calculate_depth(step_id, depth=0):
             nonlocal max_depth
             max_depth = max(max_depth, depth)

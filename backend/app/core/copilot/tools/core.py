@@ -4,55 +4,61 @@ Core Copilot Tools - Node CRUD operations.
 Provides tools for creating, connecting, deleting, and updating nodes in the graph.
 """
 
-from typing import Any, Dict, List, Optional
 import json
 import uuid
+from typing import Any, Dict, List, Optional
 
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 
 from app.core.copilot.tools.registry import get_node_registry
 
-
 # ==================== Tool Input Schemas ====================
+
 
 class CreateNodeInput(BaseModel):
     """Input schema for create_node tool."""
+
     node_type: str = Field(
         description="Node type. Must be one of: 'agent', 'condition', 'condition_agent', 'direct_reply', 'human_input', 'http', 'custom_function', 'execute_flow', 'iteration'"
     )
     label: str = Field(description="Human-readable label for the node (e.g., 'Support Agent', 'Sentiment Check')")
-    position_x: float = Field(description="X position coordinate on canvas. Use nextAvailablePosition.x from context_data for sequential nodes.")
-    position_y: float = Field(description="Y position coordinate on canvas. Use nextAvailablePosition.y from context_data for sequential nodes.")
+    position_x: float = Field(
+        description="X position coordinate on canvas. Use nextAvailablePosition.x from context_data for sequential nodes."
+    )
+    position_y: float = Field(
+        description="Y position coordinate on canvas. Use nextAvailablePosition.y from context_data for sequential nodes."
+    )
     system_prompt: Optional[str] = Field(
-        default=None, 
-        description="REQUIRED for agent nodes. Detailed system prompt defining the agent's behavior, role, and task. Be specific!"
+        default=None,
+        description="REQUIRED for agent nodes. Detailed system prompt defining the agent's behavior, role, and task. Be specific!",
     )
     model: Optional[str] = Field(
-        default=None, 
-        description="Optional for agent nodes. Model name (e.g., 'gpt-4o', 'gpt-4o-mini'). Leave empty to use default."
+        default=None,
+        description="Optional for agent nodes. Model name (e.g., 'gpt-4o', 'gpt-4o-mini'). Leave empty to use default.",
     )
     use_deep_agents: Optional[bool] = Field(
-        default=False, 
-        description="For agent nodes only. Set to True to enable DeepAgents mode for complex multi-step tasks."
+        default=False,
+        description="For agent nodes only. Set to True to enable DeepAgents mode for complex multi-step tasks.",
     )
     description: Optional[str] = Field(
-        default=None, 
-        description="REQUIRED for DeepAgents subagents. Clear, action-oriented description of what this subagent does (e.g., 'Conducts web research and synthesizes findings'). Required when use_deep_agents=True or parent has useDeepAgents=true."
+        default=None,
+        description="REQUIRED for DeepAgents subagents. Clear, action-oriented description of what this subagent does (e.g., 'Conducts web research and synthesizes findings'). Required when use_deep_agents=True or parent has useDeepAgents=true.",
     )
     tools_builtin: Optional[List[str]] = Field(
-        default=None, 
-        description="For agent nodes only. List of builtin tool names (e.g., ['web_search', 'code_interpreter'])."
+        default=None,
+        description="For agent nodes only. List of builtin tool names (e.g., ['web_search', 'code_interpreter']).",
     )
     tools_mcp: Optional[List[str]] = Field(
-        default=None, 
-        description="For agent nodes only. List of MCP tool identifiers (e.g., ['server_name::tool_name'])."
+        default=None,
+        description="For agent nodes only. List of MCP tool identifiers (e.g., ['server_name::tool_name']).",
     )
     reasoning: str = Field(description="Explanation for why this node is being created")
 
 
 class ConnectNodesInput(BaseModel):
     """Input schema for connect_nodes tool."""
+
     source: str = Field(description="Source node ID")
     target: str = Field(description="Target node ID")
     reasoning: str = Field(description="Explanation for why these nodes are being connected")
@@ -60,37 +66,28 @@ class ConnectNodesInput(BaseModel):
 
 class DeleteNodeInput(BaseModel):
     """Input schema for delete_node tool."""
+
     node_id: str = Field(description="ID of the node to delete")
     reasoning: str = Field(description="Explanation for why this node is being deleted")
 
 
 class UpdateConfigInput(BaseModel):
     """Input schema for update_config tool."""
+
     node_id: str = Field(description="ID of the node to update")
-    system_prompt: Optional[str] = Field(
-        default=None, 
-        description="New system prompt"
-    )
-    model: Optional[str] = Field(
-        default=None, 
-        description="New model name"
-    )
-    use_deep_agents: Optional[bool] = Field(
-        default=None, 
-        description="Enable/disable DeepAgents mode"
-    )
-    description: Optional[str] = Field(
-        default=None, 
-        description="New description for DeepAgents"
-    )
+    system_prompt: Optional[str] = Field(default=None, description="New system prompt")
+    model: Optional[str] = Field(default=None, description="New model name")
+    use_deep_agents: Optional[bool] = Field(default=None, description="Enable/disable DeepAgents mode")
+    description: Optional[str] = Field(default=None, description="New description for DeepAgents")
     reasoning: str = Field(description="Explanation for this configuration update")
 
 
 # ==================== Tool Definitions ====================
 
+
 @tool(
     args_schema=CreateNodeInput,
-    description="Create a new node in the graph workflow. Returns CREATE_NODE action with generated ID. See system prompt for DeepAgents rules and position calculation."
+    description="Create a new node in the graph workflow. Returns CREATE_NODE action with generated ID. See system prompt for DeepAgents rules and position calculation.",
 )
 def create_node(
     node_type: str,
@@ -112,7 +109,7 @@ def create_node(
 ) -> str:
     """
     Create a new node in the graph workflow.
-    
+
     Args:
         node_type: Node type ('agent', 'condition', etc.)
         label: Human-readable label
@@ -130,12 +127,12 @@ def create_node(
         options: For condition_agent nodes
         template: For direct_reply nodes
         prompt: For human_input nodes
-    
+
     Returns:
         JSON string with CREATE_NODE action containing generated node ID.
         Node can be referenced by ID or label (@label:LabelName).
-    
-    Note: 
+
+    Note:
     - Position values are pre-calculated in system prompt for DeepAgents workflows
     - For DeepAgents: Use exact positions from <position-calculation> section
     - For single nodes: Use nextAvailablePosition from context
@@ -144,14 +141,14 @@ def create_node(
     try:
         # Generate unique node ID
         node_id = f"{node_type}_{uuid.uuid4().hex[:8]}"
-        
+
         # Register in the node registry for semantic reference
         registry = get_node_registry()
-        seq_num = registry.register(node_id, label, node_type)
-        
+        registry.register(node_id, label, node_type)
+
         # Build config based on node type
         config: Dict[str, Any] = {}
-        
+
         if node_type == "agent":
             if system_prompt:
                 config["systemPrompt"] = system_prompt
@@ -182,7 +179,7 @@ def create_node(
         elif node_type == "human_input":
             if prompt:
                 config["prompt"] = prompt
-        
+
         action = {
             "type": "CREATE_NODE",
             "payload": {
@@ -199,17 +196,14 @@ def create_node(
         return json.dumps(action, ensure_ascii=False)
     except Exception as e:
         from loguru import logger
+
         logger.error(f"create_node failed: {e}")
-        return json.dumps({
-            "type": "ERROR",
-            "error": str(e),
-            "message": "Failed to create node"
-        }, ensure_ascii=False)
+        return json.dumps({"type": "ERROR", "error": str(e), "message": "Failed to create node"}, ensure_ascii=False)
 
 
 @tool(
     args_schema=ConnectNodesInput,
-    description="Connect two nodes with an edge. Nodes can be referenced by ID or label (@label:Name). See system prompt for DeepAgents topology rules."
+    description="Connect two nodes with an edge. Nodes can be referenced by ID or label (@label:Name). See system prompt for DeepAgents topology rules.",
 )
 def connect_nodes(
     source: str,
@@ -218,15 +212,15 @@ def connect_nodes(
 ) -> str:
     """
     Connect two nodes with an edge.
-    
+
     Args:
         source: Source node ID or label reference (@label:Name)
         target: Target node ID or label reference (@label:Name)
         reasoning: Why these nodes are connected
-    
+
     Returns:
         JSON string with CONNECT_NODES action.
-    
+
     Note: See system prompt for DeepAgents star topology requirements.
     """
     try:
@@ -234,7 +228,7 @@ def connect_nodes(
         registry = get_node_registry()
         resolved_source = registry.resolve(source)
         resolved_target = registry.resolve(target)
-        
+
         action = {
             "type": "CONNECT_NODES",
             "payload": {
@@ -243,7 +237,7 @@ def connect_nodes(
             },
             "reasoning": reasoning,
         }
-        
+
         # Include original references for debugging if they were resolved
         if resolved_source != source or resolved_target != target:
             action["_resolved"] = {
@@ -252,21 +246,18 @@ def connect_nodes(
                 "source_id": resolved_source,
                 "target_id": resolved_target,
             }
-        
+
         return json.dumps(action, ensure_ascii=False)
     except Exception as e:
         from loguru import logger
+
         logger.error(f"connect_nodes failed: {e}")
-        return json.dumps({
-            "type": "ERROR",
-            "error": str(e),
-            "message": "Failed to connect nodes"
-        }, ensure_ascii=False)
+        return json.dumps({"type": "ERROR", "error": str(e), "message": "Failed to connect nodes"}, ensure_ascii=False)
 
 
 @tool(
     args_schema=DeleteNodeInput,
-    description="Delete a node from the graph. Node can be referenced by ID or label. Removes node and all connected edges."
+    description="Delete a node from the graph. Node can be referenced by ID or label. Removes node and all connected edges.",
 )
 def delete_node(
     node_id: str,
@@ -274,11 +265,11 @@ def delete_node(
 ) -> str:
     """
     Delete a node from the graph.
-    
+
     Args:
         node_id: Node ID or label reference (@label:Name)
         reasoning: Why this node is being deleted
-    
+
     Returns:
         JSON string with DELETE_NODE action.
     """
@@ -286,7 +277,7 @@ def delete_node(
         # Resolve semantic reference to actual ID
         registry = get_node_registry()
         resolved_id = registry.resolve(node_id)
-        
+
         action = {
             "type": "DELETE_NODE",
             "payload": {
@@ -297,17 +288,14 @@ def delete_node(
         return json.dumps(action, ensure_ascii=False)
     except Exception as e:
         from loguru import logger
+
         logger.error(f"delete_node failed: {e}")
-        return json.dumps({
-            "type": "ERROR",
-            "error": str(e),
-            "message": "Failed to delete node"
-        }, ensure_ascii=False)
+        return json.dumps({"type": "ERROR", "error": str(e), "message": "Failed to delete node"}, ensure_ascii=False)
 
 
 @tool(
     args_schema=UpdateConfigInput,
-    description="Update node configuration. Only include parameters that need to change. Node can be referenced by ID or label."
+    description="Update node configuration. Only include parameters that need to change. Node can be referenced by ID or label.",
 )
 def update_config(
     node_id: str,
@@ -323,7 +311,7 @@ def update_config(
 ) -> str:
     """
     Update node configuration.
-    
+
     Args:
         node_id: Node ID or label reference (@label:Name)
         reasoning: Why this update is needed
@@ -335,7 +323,7 @@ def update_config(
         instruction: For condition_agent nodes
         options: For condition_agent nodes
         template: For direct_reply nodes
-    
+
     Returns:
         JSON string with UPDATE_CONFIG action.
     """
@@ -343,9 +331,9 @@ def update_config(
         # Resolve semantic reference to actual ID
         registry = get_node_registry()
         resolved_id = registry.resolve(node_id)
-        
+
         config: Dict[str, Any] = {}
-        
+
         if system_prompt is not None:
             config["systemPrompt"] = system_prompt
         if model is not None:
@@ -362,7 +350,7 @@ def update_config(
             config["options"] = options
         if template is not None:
             config["template"] = template
-        
+
         action = {
             "type": "UPDATE_CONFIG",
             "payload": {
@@ -374,9 +362,6 @@ def update_config(
         return json.dumps(action, ensure_ascii=False)
     except Exception as e:
         from loguru import logger
+
         logger.error(f"update_config failed: {e}")
-        return json.dumps({
-            "type": "ERROR",
-            "error": str(e),
-            "message": "Failed to update config"
-        }, ensure_ascii=False)
+        return json.dumps({"type": "ERROR", "error": str(e), "message": "Failed to update config"}, ensure_ascii=False)
